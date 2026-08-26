@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>FFmpeg 原生 CDN 极速视频压缩</title>
+  <style>
+    body { font-family: system-ui, sans-serif; padding: 20px; line-height: 1.6; max-width: 600px; margin: 0 auto; }
+    .box { margin: 15px 0; }
+    progress { width: 100%; height: 20px; }
+  </style>
+
+  <!-- 1. 通过 CDN 直接引入 FFmpeg.wasm 库 (无需 Node/npm) -->
+  <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js"></script>
+</head>
+<body>
+
+  <h2>FFmpeg.wasm 极速视频压缩 (纯原生 HTML/JS)</h2>
+  
+  <div class="box">
+    <input type="file" id="videoInput" accept="video/*">
+  </div>
+
+  <div class="box">
+    <label>压缩强度 (CRF): </label>
+    <select id="crf">
+      <option value="23">低压缩 (画质高，文件较大)</option>
+      <option value="28" selected>中压缩 (推荐，画质与体积均衡)</option>
+      <option value="32">高压缩 (体积超小，画质有所损失)</option>
+    </select>
+    
+    <br><br>
+    
+    <label>目标高度: </label>
+    <select id="scale">
+      <option value="-2:480">480p (速度快)</option>
+      <option value="-2:720" selected>720p (推荐)</option>
+      <option value="-2:1080">保持/降至 1080p</option>
+    </select>
+  </div>
+
+  <div class="box">
+    <button id="startBtn" disabled>开始 FFmpeg 压制</button>
+  </div>
+
+  <div class="box">
+    <p id="status">正在准备组件，请稍候...</p>
+    <progress id="progressBar" value="0" max="100" style="display:none;"></progress>
+  </div>
+
+  <div class="box" id="resultBox" style="display:none;">
+    <h3>压缩结果：</h3>
+    <p id="sizeInfo"></p>
+    <video id="compressedVideo" controls width="100%"></video>
+    <br><br>
+    <a id="downloadBtn" download="compressed.mp4">点击下载压缩后的 MP4</a>
+  </div>
+
+  <script>
+    // 2. 封装 FFmpeg 压制类
+    class FFmpegCompressor {
+      constructor() {
+        const { createFFmpeg } = FFmpeg;
+        // 初始化 FFmpeg 实例，并指定 core path 从 CDN 加载
+        this.ffmpeg = createFFmpeg({
+          log: true,
+          corePath: 'https://unpkg.com/@ffmpeg/core@0.11.0/dist/ffmpeg-core.js'
+        });
+        this.isLoaded = false;
+      }
+
+      async init() {
+        if (!this.isLoaded) {
+          await this.ffmpeg.load();
+          this.isLoaded = true;
+        }
+      }
+
+      /**
+       * 核心压制方法
+       */
+      async compress(file, options = {}) {
+        const { crf = 28, scale = '-2:720', onProgress } = options;
+        const { fetchFile } = FFmpeg;
+
+        await this.init();
+
+        const inputName = 'input.mp4';
+        const outputName = 'output.mp4';
+
+        // 设置进度监听
+        if (typeof onProgress === 'function') {
+          this.ffmpeg.setProgress(({ ratio }) => {
+            const percentage = Math.min(Math.max(Math.round(ratio * 100), 0), 100);
+            onProgress(percentage);
+          });
+        }
+
+        // 写入文件到 WASM 内存虚拟文件系统
+        this.ffmpeg.FS('writeFile', inputName, await fetchFile(file));
+
+        // 执行 FFmpeg 压制指令
+        // -preset ultrafast 是提升处理速度的核心参数
+        await this.ffmpeg.run(
+          '-i', inputName,
+          '-vf', `scale=${scale}`,
+          '-c:v', 'libx264',
+          '-crf', String(crf),
+          '-preset', 'ultrafast',
+          '-c:a', 'aac',
+          '-b:a', '128k',
+          outputName
+        );
+
+        // 从虚拟文件系统读取结果
+        const data = this.ffmpeg.FS('readFile', outputName);
+
+        // 释放内存资源
+        this.ffmpeg.FS('unlink', inputName);
+        this.ffmpeg.FS('unlink', outputName);
+
+        return new Blob([data.buffer], { type: 'video/mp4' });
+      }
+    }
+
+    // ================= 页面 UI 控制逻辑 =================
+    const compressor = new FFmpegCompressor();
+    const videoInput = document.getElementById('videoInput');
+    const startBtn = document.getElementById('startBtn');
+    const status = document.getElementById('status');
+    const progressBar = document.getElementById('progressBar');
+    const resultBox = document.getElementById('resultBox');
+    const compressedVideo = document.getElementById('compressedVideo');
+    const sizeInfo = document.getElementById('sizeInfo');
+    const downloadBtn = document.getElementById('downloadBtn');
+
+    let currentFile = null;
+
+    // 预加载 FFmpeg WASM 核心（体积约 20MB，仅加载一次）
+    compressor.init().then(() => {
+      status.innerText = 'FFmpeg 引擎加载完成！请选择视频。';
+      if (currentFile) startBtn.disabled = false;
+    }).catch(err => {
+      console.error(err);
+      status.innerText = 'FFmpeg 加载失败，请检查网络或跨域响应头配置。';
+    });
+
+    videoInput.addEventListener('change', (e) => {
+      currentFile = e.target.files[0];
+      if (currentFile) {
+        if (compressor.isLoaded) startBtn.disabled = false;
+        status.innerText = `已选择文件: ${currentFile.name} (${(currentFile.size / 1024 / 1024).toFixed(2)} MB)`;
+      }
+    });
+
+    startBtn.addEventListener('click', async () => {
+      if (!currentFile) return;
+
+      const crf = parseInt(document.getElementById('crf').value);
+      const scale = document.getElementById('scale').value;
+
+      startBtn.disabled = true;
+      progressBar.style.display = 'block';
+      progressBar.value = 0;
+      status.innerText = '正在压制中 (采用 H.264 ultrafast 预设)...';
+      resultBox.style.display = 'none';
+
+      try {
+        const compressedBlob = await compressor.compress(currentFile, {
+          crf: crf,
+          scale: scale,
+          onProgress: (percent) => {
+            progressBar.value = percent;
+            status.innerText = `压制进度: ${percent}%`;
+          }
+        });
+
+        // 输出预览与下载
+        const compressedUrl = URL.createObjectURL(compressedBlob);
+        compressedVideo.src = compressedUrl;
+
+        const origSize = (currentFile.size / 1024 / 1024).toFixed(2);
+        const newSize = (compressedBlob.size / 1024 / 1024).toFixed(2);
+
+        sizeInfo.innerHTML = `原大小: <b>${origSize} MB</b> | 压缩后: <b>${newSize} MB</b>`;
+        downloadBtn.href = compressedUrl;
+
+        resultBox.style.display = 'block';
+        status.innerText = '压制完成！';
+      } catch (err) {
+        console.error(err);
+        status.innerText = '压制失败: ' + err.message;
+      } finally {
+        startBtn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
