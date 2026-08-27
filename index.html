@@ -2893,7 +2893,7 @@ function mediaGridHTML(post){
   const items = post.media.map((m,i)=>{
     const url = URL.createObjectURL(m.blob);
     if(m.type === 'image'){
-      return `<div class="m-item" data-idx="${i}"><img src="${url}"></div>`;
+      return `<div class="m-item" data-idx="${i}"><img src="${url}" loading="lazy"></div>`;
     }
     return `<div class="m-item" data-idx="${i}"><video src="${url}" muted preload="metadata"></video><span class="play-badge"><svg viewBox="0 0 24 24" fill="currentColor"><polygon points="6 3 20 12 6 21 6 3"/></svg></span></div>`;
   }).join('');
@@ -3142,7 +3142,7 @@ async function renderSquare(){
 function remoteMediaGridHTML(post){
   if(!post.media || !post.media.length) return '';
   const items = post.media.map((m,i)=>{
-    if(m.type === 'image') return `<div class="m-item" data-idx="${i}"><img src="${m.url}"></div>`;
+    if(m.type === 'image') return `<div class="m-item" data-idx="${i}"><img src="${m.url}" loading="lazy"></div>`;
     return `<div class="m-item" data-idx="${i}"><video src="${m.url}" muted preload="metadata"></video><span class="play-badge"><svg viewBox="0 0 24 24" fill="currentColor"><polygon points="6 3 20 12 6 21 6 3"/></svg></span></div>`;
   }).join('');
   return `<div class="media-grid ${gridClass(post.media.length)}" data-square-post="${post.id}">${items}</div>`;
