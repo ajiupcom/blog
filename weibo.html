@@ -7,7 +7,7 @@
   <title>多媒体记事本 · 微博</title>
   <style>
     :root {
-      --bg: #fff;
+      --bg: #f3f1ec;
       --card: #ffffff;
       --text: #1c1c1e;
       --text-dim: #6b6b70;
@@ -37,11 +37,11 @@
     }
 
     :root[data-theme="dark"] {
-      --bg: #111113;
+      --bg: #555;
       --card: #1b1b1e;
       --text: #f2f1ee;
       --text-dim: #a5a5aa;
-      --text-faint: #727276;
+      --text-faint: #aaa;
       --border: #2a2a2d;
       --border: #333;
       --accent: #ff7a4d;
@@ -75,7 +75,7 @@
 
     body {
       background: var(--bg);
-      background: #f3f1ec;
+      background: #fff;
       color: var(--text);
       font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", Arial, sans-serif;
       -webkit-font-smoothing: antialiased;
@@ -190,6 +190,20 @@
       cursor: pointer;
       flex-shrink: 0;
     }
+    .avatar-wrap { position: relative; display: inline-flex; flex-shrink: 0; }
+    .blogger-open-trigger { cursor: pointer; }
+    .avatar-wrap .avatar { display: block; }
+    .online-dot {
+      position: absolute;
+      right: 2px;
+      bottom: 2px;
+      width: 11px;
+      height: 11px;
+      border-radius: 50%;
+      background: #2ecc71;
+      border: 2px solid var(--card);
+    }
+    .post-head .avatar-wrap .online-dot { width: 9px; height: 9px; right: -1px; bottom: -1px; }
 
     .edit-pencil {
       position: absolute;
@@ -1161,7 +1175,7 @@
       border-top: 1px solid var(--border);
     }
 
-    .vis-opt {
+    .vis-opt, .theme-opt {
       flex: 1;
       text-align: center;
       padding: 10px 4px;
@@ -1173,7 +1187,7 @@
       border: 1.5px solid transparent;
     }
 
-    .vis-opt.selected {
+    .vis-opt.selected, .theme-opt.selected {
       border-color: var(--accent);
       color: var(--accent);
       font-weight: 600;
@@ -1585,7 +1599,9 @@
         <button class="icon-btn" id="contactsBtn" title="通讯录">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.5-7 8-7s8 3 8 7"/></svg>
         </button>
-        <button class="icon-btn theme-toggle" id="themeToggle" title="切换明暗模式">🌓</button>
+        <button class="icon-btn" id="homeBtn" title="返回我的本地主页">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9.5 12 3l9 6.5V21a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/></svg>
+        </button>
       </div>
       <div id="topRightIcons" style="display:flex;gap:8px;"></div>
     </div>
@@ -1613,7 +1629,7 @@
 
   <!-- ===== tabs ===== -->
   <div class="tabbar" id="tabbar">
-    <span class="tab active" data-tab="all">全部</span>
+    <span class="tab active" data-tab="all">本地</span>
     <span class="tab" data-tab="synced">已同步</span>
     <span class="tab" data-tab="unsynced">未同步</span>
     <span class="tab" data-tab="favorites">收藏</span>
@@ -1756,7 +1772,14 @@
       <span style="width:40px;"></span>
     </div>
     <div class="modal-body">
-      <div class="settings-row"><span>明暗模式</span><span class="val" id="settingsThemeVal">跟随系统</span></div>
+      <div class="settings-row" style="flex-direction:column;align-items:stretch;gap:8px;">
+        <span>明暗模式</span>
+        <div class="visibility-row" style="margin:0;padding:0;border:none;">
+          <div class="theme-opt" data-theme-choice="system">跟随系统</div>
+          <div class="theme-opt" data-theme-choice="light">浅色</div>
+          <div class="theme-opt" data-theme-choice="dark">深色</div>
+        </div>
+      </div>
       <div class="settings-row" style="flex-direction:column;align-items:stretch;gap:6px;">
         <div style="display:flex;justify-content:space-between;align-items:center;">
           <span>同步到云端</span>
@@ -1764,6 +1787,7 @@
         </div>
         <div class="hint-text" style="margin:0;" id="syncAccountHint">"公共"或"仅好友可见"的帖子会自动同步；"仅自己可见"的帖子永远只留在本机</div>
         <button id="syncRegisterBtn" style="display:none;background:var(--accent);color:#fff;border:none;border-radius:10px;padding:9px;font-size:13px;cursor:pointer;margin-top:4px;">注册云端账号</button>
+        <button id="syncLogoutBtn" style="display:none;background:var(--input-bg);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:9px;font-size:13px;cursor:pointer;margin-top:4px;">退出登录</button>
       </div>
       <div class="settings-row"><span>单条字数上限</span><span class="val" id="settingsMaxText"></span></div>
       <div class="settings-row"><span>单条图片上限</span><span class="val" id="settingsMaxImg"></span></div>
@@ -2003,15 +2027,33 @@ async function persistSession(userId, token, username){
   SyncState.token = token; SyncState.userId = userId; SyncState.username = username; SyncState.registered = true;
 }
 // 注册/登录成功后，把本地已有的头像/背景/签名同步一次到云端资料
+function urlToMediaKey(url){
+  if(!url) return null;
+  const i = url.indexOf('/media/');
+  return i === -1 ? null : url.slice(i + '/media/'.length);
+}
+async function rollbackUploadedMedia(urls){
+  for(const url of urls){
+    const key = urlToMediaKey(url);
+    if(!key) continue;
+    try{
+      await fetch(SyncState.endpoint.replace(/\/$/,'') + '/api/media', {
+        method:'DELETE', headers:{'content-type':'application/json','authorization':'Bearer '+SyncState.token},
+        body: JSON.stringify({key})
+      });
+    }catch(e){ /* 回滚失败也不阻塞用户，最多是留下一个孤儿文件，下次可以手动清理 */ }
+  }
+}
 async function pushLocalProfile(){
   const [avatarRow, coverRow] = await Promise.all([idbGet('settings','avatar'), idbGet('settings','cover')]);
-  let avatarUrl = null, coverUrl = null;
-  if(avatarRow) avatarUrl = await SyncAPI.uploadMedia(avatarRow.value, {type:'image'});
-  if(coverRow) coverUrl = await SyncAPI.uploadMedia(coverRow.value, {type:'image'});
+  const body = { nickname: $('#displayName').textContent, bio: $('#bioText').textContent };
+  // 只有本地真的有头像/背景时才带上这两个字段——不然会把云端已经存在的头像/背景覆盖成 null
+  if(avatarRow) body.avatar_url = await SyncAPI.uploadMedia(avatarRow.value, {type:'image'});
+  if(coverRow) body.cover_url = await SyncAPI.uploadMedia(coverRow.value, {type:'image'});
   await fetch(SyncState.endpoint.replace(/\/$/,'') + '/api/profile', {
     method:'POST',
     headers:{'content-type':'application/json','authorization':'Bearer '+SyncState.token},
-    body: JSON.stringify({ nickname: $('#displayName').textContent, bio: $('#bioText').textContent, avatar_url: avatarUrl, cover_url: coverUrl })
+    body: JSON.stringify(body)
   });
 }
 
@@ -2029,19 +2071,28 @@ const SyncAPI = {
     const data = await res.json();
     return data.url;
   },
-  // 推送一条微博（媒体需先各自 uploadMedia 拿到 url）
+  // 推送一条微博（媒体需先各自 uploadMedia 拿到 url）；如果最后保存帖子这步失败了，
+  // 已经上传到 R2 的文件会自动回滚删除，不会留下没人引用的孤儿文件
   async pushPost(post){
     if(!syncConfigured()) return {ok:false, reason:'sync-not-configured'};
+    const uploadedUrls = [];
     try{
       const media = [];
       for(const m of (post.media||[])){
-        const url = m.url || await SyncAPI.uploadMedia(m.blob, {type:m.type});
+        if(m.url){ media.push({type:m.type, url:m.url}); continue; }
+        const url = await SyncAPI.uploadMedia(m.blob, {type:m.type});
+        uploadedUrls.push(url);
         media.push({type:m.type, url});
       }
       let voice = null;
       if(post.voice){
-        const url = post.voice.url || await SyncAPI.uploadMedia(post.voice.blob, {type:'voice'});
-        voice = {url, duration:post.voice.duration};
+        if(post.voice.url){
+          voice = {url:post.voice.url, duration:post.voice.duration};
+        } else {
+          const url = await SyncAPI.uploadMedia(post.voice.blob, {type:'voice'});
+          uploadedUrls.push(url);
+          voice = {url, duration:post.voice.duration};
+        }
       }
       const res = await fetch(SyncState.endpoint.replace(/\/$/,'') + '/api/posts', {
         method:'POST',
@@ -2052,9 +2103,10 @@ const SyncAPI = {
           createdAt:post.createdAt, updatedAt:post.updatedAt
         })
       });
-      if(!res.ok) return {ok:false, reason:'server-error'};
+      if(!res.ok){ await rollbackUploadedMedia(uploadedUrls); return {ok:false, reason:'server-error'}; }
       return {ok:true};
     }catch(err){
+      await rollbackUploadedMedia(uploadedUrls);
       return {ok:false, reason: err.message || 'network-error'};
     }
   },
@@ -2128,6 +2180,69 @@ const SyncAPI = {
   async postComment(comment){
     if(!SYNC_ENABLED) return {ok:false, reason:'comments-disabled-until-sync'};
     return {ok:true};
+  },
+  // 云端评论：用在广场帖子、别人主页的帖子上（跟本地帖子的私有批注是两套体系）
+  async fetchCloudComments(postId){
+    if(!syncAvailable()) return {ok:false, comments:[]};
+    try{
+      const res = await fetch(SyncState.endpoint.replace(/\/$/,'') + `/api/comments?postId=${postId}`, {
+        headers: syncConfigured() ? {'authorization':'Bearer '+SyncState.token} : {}
+      });
+      if(!res.ok) return {ok:false, comments:[]};
+      const data = await res.json();
+      return {ok:true, comments:data.comments||[]};
+    }catch(err){ return {ok:false, comments:[]}; }
+  },
+  async submitCloudComment(postId, text){
+    if(!syncRegistered()) return {ok:false, reason:'not-registered'};
+    try{
+      const res = await fetch(SyncState.endpoint.replace(/\/$/,'') + '/api/comments', {
+        method:'POST', headers:{'content-type':'application/json','authorization':'Bearer '+SyncState.token},
+        body: JSON.stringify({postId, text})
+      });
+      if(!res.ok) return {ok:false};
+      return {ok:true, ...(await res.json())};
+    }catch(err){ return {ok:false}; }
+  },
+  // 拉取另一个用户的公开资料（点广场博主头像进入TA主页用）
+  async fetchUserProfile(userId){
+    if(!syncAvailable()) return {ok:false};
+    try{
+      const res = await fetch(SyncState.endpoint.replace(/\/$/,'') + `/api/users/${userId}`);
+      if(!res.ok) return {ok:false};
+      return {ok:true, profile: await res.json()};
+    }catch(err){ return {ok:false}; }
+  },
+  async fetchFriends(){
+    if(!syncRegistered()) return {ok:false, friends:[], pendingRequests:[]};
+    try{
+      const res = await fetch(SyncState.endpoint.replace(/\/$/,'') + '/api/friends', {
+        headers:{'authorization':'Bearer '+SyncState.token}
+      });
+      if(!res.ok) return {ok:false, friends:[], pendingRequests:[]};
+      const data = await res.json();
+      return {ok:true, friends:data.friends||[], pendingRequests:data.pendingRequests||[]};
+    }catch(err){ return {ok:false, friends:[], pendingRequests:[]}; }
+  },
+  async requestFriend(userId){
+    if(!syncRegistered()) return {ok:false};
+    try{
+      const res = await fetch(SyncState.endpoint.replace(/\/$/,'') + '/api/friends/request', {
+        method:'POST', headers:{'content-type':'application/json','authorization':'Bearer '+SyncState.token},
+        body: JSON.stringify({friendId:userId})
+      });
+      return {ok:res.ok};
+    }catch(err){ return {ok:false}; }
+  },
+  async sendMessage(toUserId, text){
+    if(!syncRegistered()) return {ok:false};
+    try{
+      const res = await fetch(SyncState.endpoint.replace(/\/$/,'') + '/api/messages', {
+        method:'POST', headers:{'content-type':'application/json','authorization':'Bearer '+SyncState.token},
+        body: JSON.stringify({toUserId, text})
+      });
+      return {ok:res.ok};
+    }catch(err){ return {ok:false}; }
   }
 };
 
@@ -2165,10 +2280,18 @@ $('#switchToRegister').addEventListener('click', ()=>{
   openRegisterModal('', authSuccessCallback);
 });
 async function afterAuthSuccess(){
+  // 如果本地昵称从来没有被用户自定义过（还是占位符状态），注册成功后默认用注册的用户名当昵称，
+  // 不然会把没意义的占位符文字同步上去，云端显示的名字就对不上注册的账号
+  const savedNickname = await idbGet('settings','nickname');
+  if(!savedNickname){
+    await idbPut('settings', {key:'nickname', value:SyncState.username});
+    $('#displayName').textContent = SyncState.username;
+  }
   await pushLocalProfile();
   updatePageTitle();
   refreshSyncStatusUI();
   showToast('欢迎，' + SyncState.username);
+  await loadFeed(true);
   if(currentTab === 'square' || currentTab === 'favorites') renderMore();
   if(authSuccessCallback){ const cb = authSuccessCallback; authSuccessCallback = null; cb(); }
 }
@@ -2212,35 +2335,83 @@ $('#loginSubmit').addEventListener('click', async ()=>{
   }catch(e){ errEl.textContent = '网络错误，请稍后重试'; }
 });
 function updatePageTitle(){
-  document.title = syncRegistered() ? `${SyncState.username}.微博` : '多媒体记事本.微博';
+  document.title = syncRegistered() ? `${SyncState.username} · 微博` : '多媒体记事本 · 微博';
 }
 
 /* =========================================================
-   3. 主题
+   3. 主题（设置里的三选一：跟随系统/浅色/深色）
 ========================================================= */
+function applyTheme(choice){
+  if(choice === 'system'){
+    localStorage.removeItem('weibo_theme');
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    document.documentElement.setAttribute('data-theme', prefersDark ? 'dark' : 'light');
+  } else {
+    localStorage.setItem('weibo_theme', choice);
+    document.documentElement.setAttribute('data-theme', choice);
+  }
+  renderThemeOpts();
+}
+function renderThemeOpts(){
+  const saved = localStorage.getItem('weibo_theme');
+  const current = saved || 'system';
+  $$('.theme-opt').forEach(el=>{
+    el.classList.toggle('selected', el.dataset.themeChoice === current);
+  });
+}
 function initTheme(){
   const saved = localStorage.getItem('weibo_theme');
   const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
   const theme = saved || (prefersDark ? 'dark' : 'light');
   document.documentElement.setAttribute('data-theme', theme);
-  $('#settingsThemeVal').textContent = saved ? (saved==='dark'?'深色':'浅色') : '跟随系统';
 }
-$('#themeToggle').addEventListener('click', ()=>{
-  const cur = document.documentElement.getAttribute('data-theme');
-  const next = cur === 'dark' ? 'light' : 'dark';
-  document.documentElement.setAttribute('data-theme', next);
-  localStorage.setItem('weibo_theme', next);
-  $('#settingsThemeVal').textContent = next==='dark'?'深色':'浅色';
+$$('.theme-opt').forEach(el=>{
+  el.addEventListener('click', ()=>applyTheme(el.dataset.themeChoice));
 });
 initTheme();
+
+$('#homeBtn').addEventListener('click', ()=>{
+  viewMode = 'owner';
+  localStorage.setItem('weibo_view', 'owner');
+  currentTab = 'all';
+  searchQuery = '';
+  $('#searchInput').value = '';
+  $('#searchBar').classList.remove('open');
+  if(viewingProfile){ viewingProfile = null; const bt = $('#bloggerTab'); if(bt) bt.remove(); }
+  $$('.tab').forEach(x=>x.classList.remove('active'));
+  $('.tab[data-tab="all"]').classList.add('active');
+  loadProfile();
+  renderHeaderOnlineDot();
+  applyViewMode();
+});
 
 /* =========================================================
    4. 视图模式：owner（博主）/ visitor（访客），本地演示切换
 ========================================================= */
 let viewMode = localStorage.getItem('weibo_view') || 'owner';
+let viewingProfile = null; // 非空时代表正在看别人的主页 {id,nickname,avatarUrl,coverUrl,bio,online,isFriend}
 
 function renderTopRightIcons(){
   const wrap = $('#topRightIcons');
+  if(viewingProfile){
+    const online = !!viewingProfile.online;
+    wrap.innerHTML = `
+      <button class="icon-btn" id="callBtn" title="语音通话" style="${online?'background:#2ecc71;':''}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6 19.8 19.8 0 0 1-3.1-8.7A2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1.1.4 2.1.7 3.1a2 2 0 0 1-.5 2.1L8 10.1a16 16 0 0 0 6 6l1.2-1.3a2 2 0 0 1 2.1-.5c1 .3 2 .6 3.1.7a2 2 0 0 1 1.6 2z"/></svg>
+      </button>
+      <button class="icon-btn" id="videoCallBtn" title="视频通话" style="${online?'background:#2ecc71;':''}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+      </button>
+      <button class="icon-btn" id="moreBtn" title="更多">
+        <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
+      </button>`;
+    $('#callBtn').addEventListener('click', ()=>showToast(viewingProfile.isFriend===true ? (online?'语音通话功能开发中':'对方不在线') : '需先添加为好友，功能开发中'));
+    $('#videoCallBtn').addEventListener('click', ()=>showToast(viewingProfile.isFriend===true ? (online?'视频通话功能开发中':'对方不在线') : '需先添加为好友，功能开发中'));
+    $('#moreBtn').addEventListener('click', ()=>{
+      if(confirm('举报该博主？')) showToast('举报已提交，感谢反馈');
+    });
+    return;
+  }
   if(viewMode === 'owner'){
     wrap.innerHTML = `
       <button class="icon-btn" id="bellBtn" title="消息">
@@ -2292,26 +2463,35 @@ $('#viewSwitch').addEventListener('click', ()=>{
   applyViewMode();
 });
 
-// 加好友/取消好友 —— 目前是纯前端演示态；真正的好友关系（好友请求/接受/在线状态等）
-// 需要接入下面讨论中的会员系统后端，这里先做界面交互，等后端 ready 后把 toggle 换成真实请求。
+// 加好友/取消好友：只有在"访问别人的主页"时才有真实意义，用 viewingProfile 的好友状态驱动。
 // 加好友与发私信互斥：没加好友时不能发私信（灰），加了好友之后"加好友"变成灰色的
 // "取消好友"，"发私信"则变成可点的红色——同一时间只有一个按钮是"红色可点"的。
-let isFriendDemo = false;
 function renderFriendToggle(){
   const btn = $('#friendToggleBtn');
   const msgBtn = $('#msgBtn');
-  btn.textContent = isFriendDemo ? '取消好友' : '加好友';
-  btn.classList.toggle('is-friend', isFriendDemo);
-  msgBtn.classList.toggle('enabled', isFriendDemo);
+  if(!viewingProfile){ btn.textContent = '加好友'; btn.classList.remove('is-friend'); msgBtn.classList.remove('enabled'); return; }
+  const isFriend = viewingProfile.isFriend === true;
+  const requested = viewingProfile.isFriend === 'pending';
+  btn.textContent = isFriend ? '取消好友' : (requested ? '已请求' : '加好友');
+  btn.classList.toggle('is-friend', isFriend || requested);
+  msgBtn.classList.toggle('enabled', isFriend);
 }
-$('#friendToggleBtn').addEventListener('click', ()=>{
-  isFriendDemo = !isFriendDemo;
+$('#friendToggleBtn').addEventListener('click', async ()=>{
+  if(!viewingProfile) return;
+  if(!syncRegistered()){ openRegisterModal('加好友需要先注册一个账号'); return; }
+  if(viewingProfile.isFriend === true){ showToast('取消好友功能还在开发中'); return; }
+  if(viewingProfile.isFriend === 'pending'){ showToast('好友请求已发送，等待对方确认'); return; }
+  const result = await SyncAPI.requestFriend(viewingProfile.id);
+  if(!result.ok){ showToast('请求发送失败，请稍后重试'); return; }
+  viewingProfile.isFriend = 'pending';
+  showToast('已发送好友请求，等待对方确认');
   renderFriendToggle();
-  showToast(isFriendDemo ? '已添加好友（演示态，好友系统上线后生效）' : '已取消好友');
+  if(currentTab === 'blogger') renderBloggerPosts();
 });
 $('#msgBtn').addEventListener('click', ()=>{
-  if(!isFriendDemo){ showToast('先添加好友才能发私信'); return; }
-  showToast('私信功能还在开发中');
+  if(!viewingProfile) return;
+  if(viewingProfile.isFriend !== true){ showToast('先添加好友才能发私信'); return; }
+  openMessageModal(viewingProfile.id, viewingProfile.nickname);
 });
 renderFriendToggle();
 
@@ -2455,7 +2635,10 @@ function createRecorder(maxSec){
         clearInterval(tickTimer);
         if(!mediaRecorder || mediaRecorder.state==='inactive'){ resolve(null); return; }
         mediaRecorder.onstop = () => {
-          const blob = new Blob(chunks, {type:'audio/webm'});
+          // 用录音器实际产出的 mimeType，不要写死 audio/webm——
+          // 不同浏览器（尤其 Safari/iOS）实际编码格式可能不一样，写死会导致
+          // 文件类型标注和真实内容不匹配，表现为"能播放但没声音"或直接播放失败
+          const blob = new Blob(chunks, {type: mediaRecorder.mimeType || 'audio/webm'});
           const duration = (Date.now()-startTs)/1000;
           stream.getTracks().forEach(t=>t.stop());
           resolve({blob, duration});
@@ -2532,7 +2715,7 @@ $('#camShutter').addEventListener('click', async ()=>{
       camState.recorder = new MediaRecorder(camState.stream);
       camState.recorder.ondataavailable = e => camState.chunks.push(e.data);
       camState.recorder.onstop = () => {
-        const blob = new Blob(camState.chunks, {type:'video/webm'});
+        const blob = new Blob(camState.chunks, {type: camState.recorder.mimeType || 'video/webm'}); // 同样用实际 mimeType，不写死
         camState.capturedBlob = blob;
         camState.recordedDuration = (Date.now()-camState.startTs)/1000;
         $('#camPreview').srcObject = null;
@@ -2608,11 +2791,11 @@ function openComposer(existingPost){
 }
 function closeComposer(){ $('#composeOverlay').classList.remove('open'); }
 function renderVisibilityOpts(){
-  $$('.vis-opt').forEach(el=>{
+  $$('.vis-opt', $('#composeOverlay')).forEach(el=>{
     el.classList.toggle('selected', el.dataset.vis === composeState.visibility);
   });
 }
-$$('.vis-opt').forEach(el=>{
+$$('.vis-opt', $('#composeOverlay')).forEach(el=>{
   el.addEventListener('click', ()=>{ composeState.visibility = el.dataset.vis; renderVisibilityOpts(); });
 });
 function updateCharCount(){
@@ -2983,7 +3166,7 @@ function postHTML(post, comments){
       <div class="post-meta">
         ${ownerButtonsLeft}
         <div class="post-actions">
-          <button class="act-btn like-btn ${post.liked?'liked':''}">♡ 赞 ${post.likes||''}</button>
+          ${viewMode==='owner' ? '' : `<button class="act-btn like-btn ${post.liked?'liked':''}">♡ 赞 ${post.likes||''}</button>`}
           <button class="act-btn comment-toggle-btn">💬 评论</button>
           <button class="act-btn favorite-btn ${post.favorited?'liked':''}">${post.favorited?'★':'☆'} 收藏</button>
         </div>
@@ -3079,8 +3262,116 @@ async function renderFavorites(localFavorited){
 }
 
 /* ---- 广场：跨用户的公共帖子，来自远端 ---- */
+/* ---- 别人博主主页（"假跳转"：同一个页面换一套数据） ---- */
+function openMessageModal(userId, nickname){
+  openTextEditModal(`发私信给 ${escapeHTML(nickname)}`, '', 300, async (val)=>{
+    if(!val.trim()) return;
+    const result = await SyncAPI.sendMessage(userId, val.trim());
+    showToast(result.ok ? '已发送' : '发送失败，请稍后重试');
+  }, '发送');
+}
+async function openBloggerProfile(userId){
+  if(!syncAvailable()) return;
+  if(syncRegistered() && Number(userId) === Number(SyncState.userId)){
+    // 点到自己头像了，直接回自己主页更合理
+    exitBloggerProfile();
+    return;
+  }
+  const result = await SyncAPI.fetchUserProfile(userId);
+  if(!result.ok){ showToast('博主主页加载失败'); return; }
+  const p = result.profile;
+  let isFriend = false;
+  if(syncRegistered()){
+    const fr = await SyncAPI.fetchFriends();
+    if(fr.ok) isFriend = fr.friends.some(f=>Number(f.id)===Number(userId));
+  }
+  viewingProfile = { id:p.id, nickname:p.nickname, avatarUrl:p.avatarUrl, coverUrl:p.coverUrl, bio:p.bio, online:p.online, isFriend };
+
+  // 头部换成这个博主的资料（本地设置不受影响，退出时用 loadProfile() 换回来）
+  $('#avatarImg').src = p.avatarUrl || placeholderAvatar();
+  $('#coverImg').src = p.coverUrl || placeholderCover();
+  $('#displayName').textContent = p.nickname || '匿名用户';
+  $('#bioText').textContent = p.bio || '';
+  renderHeaderOnlineDot();
+
+  $('#openComposer').style.display = 'none';
+  $('#coverPencil').style.display = 'none';
+  $('#followRow').style.display = 'flex';
+  renderFriendToggle();
+  renderTopRightIcons();
+
+  enterBloggerTabMode();
+}
+function renderHeaderOnlineDot(){
+  let wrap = $('#avatarImg').closest('.avatar-wrap');
+  if(!wrap){
+    // 头像原本不是包在 avatar-wrap 里的（本地视图不需要绿点），这里动态包一层
+    const img = $('#avatarImg');
+    wrap = document.createElement('span');
+    wrap.className = 'avatar-wrap';
+    img.parentNode.insertBefore(wrap, img);
+    wrap.appendChild(img);
+  }
+  let dot = wrap.querySelector('.online-dot');
+  const shouldShow = viewingProfile && viewingProfile.online;
+  if(shouldShow && !dot){
+    dot = document.createElement('span');
+    dot.className = 'online-dot';
+    wrap.appendChild(dot);
+  } else if(!shouldShow && dot){
+    dot.remove();
+  }
+}
+function exitBloggerProfile(){
+  viewingProfile = null;
+  const bloggerTab = $('#bloggerTab');
+  if(bloggerTab) bloggerTab.remove();
+  loadProfile();
+  renderHeaderOnlineDot();
+  applyViewMode();
+}
+function enterBloggerTabMode(){
+  if(!$('#bloggerTab')){
+    const tabbar = $('#tabbar');
+    const bloggerTab = document.createElement('span');
+    bloggerTab.className = 'tab';
+    bloggerTab.id = 'bloggerTab';
+    bloggerTab.dataset.tab = 'blogger';
+    bloggerTab.textContent = '全部';
+    tabbar.insertBefore(bloggerTab, tabbar.firstChild);
+    bindTabClick(bloggerTab);
+  }
+  $$('.tab[data-tab="synced"], .tab[data-tab="unsynced"]').forEach(t=>t.style.display='none');
+  $$('.tab').forEach(x=>x.classList.remove('active'));
+  $('#bloggerTab').classList.add('active');
+  currentTab = 'blogger';
+  renderBloggerPosts();
+}
+async function renderBloggerPosts(){
+  if(!viewingProfile) return;
+  const feed = $('#feed');
+  $('#loadSentinel').textContent = '';
+  feed.innerHTML = `<div class="empty-state">正在加载TA的主页…</div>`;
+  const res = await fetch(SyncState.endpoint.replace(/\/$/,'') + `/api/posts?userId=${viewingProfile.id}`, {
+    headers: syncConfigured() ? {'authorization':'Bearer '+SyncState.token} : {}
+  });
+  if(!res.ok){ feed.innerHTML = `<div class="empty-state">加载失败，请稍后重试</div>`; return; }
+  const data = await res.json();
+  const posts = data.posts || [];
+  if(!posts.length){ feed.innerHTML = `<div class="empty-state">TA还没有公开发布过内容</div>`; return; }
+  const friendBtnHTML = `<button class="act-btn friend-post-btn ${viewingProfile.isFriend===true?'is-friend':''}" data-uid="${viewingProfile.id}">${viewingProfile.isFriend===true?'取消好友':(viewingProfile.isFriend==='pending'?'已请求':'加好友')}</button>`;
+  squarePostsCache = posts;
+  feed.innerHTML = posts.map(post=>squarePostHTML(post, {friendButtonHTML: friendBtnHTML})).join('');
+  bindSquarePostEvents(feed);
+  $$('.friend-post-btn', feed).forEach(btn=>{
+    btn.addEventListener('click', ()=>$('#friendToggleBtn').click()); // 复用头部那一份真实逻辑，保持状态一致
+  });
+}
+
 let squarePostsCache = [];
 let squareLoading = false;
+let squareRenderedCount = 0;
+const SQUARE_PAGE_SIZE = 10;
 async function renderSquare(){
   const feed = $('#feed');
   $('#loadSentinel').textContent = '';
@@ -3119,25 +3410,36 @@ async function renderSquare(){
     squarePostsCache = result.posts;
     bindSquarePostEvents(feed);
     $$('.square-user-result', feed).forEach(el=>{
-      el.addEventListener('click', ()=>showToast('博主主页浏览功能还在开发中'));
+      el.addEventListener('click', ()=>openBloggerProfile(el.dataset.userId));
     });
     return;
   }
 
   feed.innerHTML = `<div class="empty-state">正在加载广场…</div>`;
-  const result = await SyncAPI.fetchSquare(30);
+  const result = await SyncAPI.fetchSquare(50);
   squareLoading = false;
   if(!result.ok){
     feed.innerHTML = `<div class="empty-state">广场加载失败，请稍后重试</div>`;
     return;
   }
   squarePostsCache = result.posts;
+  squareRenderedCount = 0;
   if(!squarePostsCache.length){
     feed.innerHTML = `<div class="empty-state">广场空空如也，去发一条"公共"的微博试试吧 ✨</div>`;
     return;
   }
-  feed.innerHTML = squarePostsCache.map(squarePostHTML).join('');
+  feed.innerHTML = '';
+  renderMoreSquare();
+}
+function renderMoreSquare(){
+  const feed = $('#feed');
+  const next = squarePostsCache.slice(squareRenderedCount, squareRenderedCount + SQUARE_PAGE_SIZE);
+  next.forEach(post=>feed.insertAdjacentHTML('beforeend', squarePostHTML(post)));
+  squareRenderedCount += next.length;
   bindSquarePostEvents(feed);
+  $('#loadSentinel').textContent = squareRenderedCount < squarePostsCache.length
+    ? '正在加载更多…'
+    : (squarePostsCache.length > SQUARE_PAGE_SIZE ? '已经到底啦' : '');
 }
 function remoteMediaGridHTML(post){
   if(!post.media || !post.media.length) return '';
@@ -3158,31 +3460,79 @@ function remoteVoiceHTML(voice){
     <span class="dur">${fmtDur(voice.duration||0)}″</span>
   </div>`;
 }
-function squarePostHTML(post){
+function squarePostMenuHTML(post){
+  const isMine = syncRegistered() && Number(post.userId) === Number(SyncState.userId);
+  if(isMine){
+    return `<div class="mi danger square-delete-post" data-id="${post.id}">删除</div>`;
+  }
+  return `<div class="mi square-report-post">举报</div>`;
+}
+// options.friendButtonHTML: 左对齐的"加好友"按钮（仅在"访问别人主页"场景传入，广场随手翻不需要）
+function squarePostHTML(post, options={}){
   const isLong = (post.text||'').length > 90;
   const avatarSrc = post.authorAvatar || placeholderAvatar();
+  const leftGroup = options.friendButtonHTML ? `<div class="post-actions-left">${options.friendButtonHTML}</div>` : `<div></div>`;
+  const dotHTML = post.authorOnline ? `<span class="online-dot"></span>` : '';
   return `
     <div class="post" data-square-id="${post.id}">
       <div class="post-head">
-        <img class="avatar" src="${avatarSrc}">
+        <span class="avatar-wrap blogger-open-trigger" data-uid="${post.userId}"><img class="avatar" src="${avatarSrc}">${dotHTML}</span>
         <div class="who">
-          <span class="name">${escapeHTML(post.authorNickname || '匿名用户')}</span>
+          <span class="name blogger-open-trigger" data-uid="${post.userId}">${escapeHTML(post.authorNickname || '匿名用户')}</span>
           <span class="time">${fmtTime(post.createdAt)}</span>
         </div>
+        <button class="post-menu-btn">⋯</button>
+        <div class="post-menu-dropdown">${squarePostMenuHTML(post)}</div>
       </div>
       ${post.text ? `<div class="post-body">${escapeHTML(post.text).slice(0, isLong?88:undefined)}${isLong?'…':''}</div>` : ''}
       ${remoteMediaGridHTML(post)}
       ${remoteVoiceHTML(post.voice)}
       <div class="post-meta">
+        ${leftGroup}
         <div class="post-actions">
           <button class="act-btn square-like-btn" data-id="${post.id}">♡ 赞</button>
-          <button class="act-btn square-comment-btn">💬 评论</button>
+          <button class="act-btn square-comment-btn" data-id="${post.id}">💬 评论</button>
           <button class="act-btn square-favorite-btn" data-id="${post.id}">☆ 收藏</button>
         </div>
       </div>
+      <div class="square-comments-wrap" data-post="${post.id}" style="display:none;"></div>
     </div>`;
 }
 function bindSquarePostEvents(root){
+  $$('.blogger-open-trigger', root).forEach(el=>{
+    if(el.dataset.bound) return; el.dataset.bound='1';
+    el.addEventListener('click', ()=>openBloggerProfile(el.dataset.uid));
+  });
+  $$('.post-menu-btn', root).forEach(btn=>{
+    if(btn.dataset.bound) return; btn.dataset.bound='1';
+    btn.addEventListener('click', (e)=>{
+      e.stopPropagation();
+      const dd = $('.post-menu-dropdown', btn.closest('.post-head'));
+      const wasOpen = dd.classList.contains('open');
+      $$('.post-menu-dropdown.open').forEach(x=>x.classList.remove('open'));
+      if(!wasOpen) dd.classList.add('open');
+    });
+  });
+  $$('.square-report-post', root).forEach(el=>{
+    if(el.dataset.bound) return; el.dataset.bound='1';
+    el.addEventListener('click', ()=>{
+      showToast('举报已提交，感谢反馈');
+      el.closest('.post-menu-dropdown').classList.remove('open');
+    });
+  });
+  $$('.square-delete-post', root).forEach(el=>{
+    if(el.dataset.bound) return; el.dataset.bound='1';
+    el.addEventListener('click', async ()=>{
+      if(!confirm('删除这条云端帖子？删除后不可恢复')) return;
+      const result = await SyncAPI.deletePost(el.dataset.id);
+      if(!result.ok){ showToast('删除失败，请稍后重试'); return; }
+      // 如果本地也有这条帖子（是我自己发布并同步的），把本地的同步状态也重置
+      const localPost = await idbGet('posts', el.dataset.id);
+      if(localPost){ localPost.synced = false; await idbPut('posts', localPost); }
+      showToast('已删除');
+      renderSquare();
+    });
+  });
   $$('.square-like-btn', root).forEach(btn=>{
     btn.addEventListener('click', async ()=>{
       if(!syncRegistered()){ openRegisterModal('点赞需要先注册一个账号'); return; }
@@ -3193,7 +3543,8 @@ function bindSquarePostEvents(root){
     });
   });
   $$('.square-comment-btn', root).forEach(btn=>{
-    btn.addEventListener('click', ()=>showToast('跨用户评论需要先支持会员审核体系，正在设计中'));
+    if(btn.dataset.bound) return; btn.dataset.bound='1';
+    btn.addEventListener('click', ()=>toggleSquareCommentThread(btn.dataset.id, root));
   });
   $$('.square-favorite-btn', root).forEach(btn=>{
     btn.addEventListener('click', async ()=>{
@@ -3236,10 +3587,67 @@ function bindSquarePostEvents(root){
   });
 }
 
+/* ---- 云端评论线程（广场帖子 / 别人主页的帖子共用）---- */
+async function toggleSquareCommentThread(postId, root){
+  const wrap = root.querySelector(`.square-comments-wrap[data-post="${postId}"]`);
+  if(!wrap) return;
+  const isOpen = wrap.style.display !== 'none';
+  if(isOpen){ wrap.style.display = 'none'; return; }
+  wrap.style.display = 'block';
+  if(wrap.dataset.loaded) return; // 已经加载过就不重复请求
+  wrap.dataset.loaded = '1';
+  wrap.innerHTML = `<div class="hint-text" style="padding:8px 16px;">正在加载评论…</div>`;
+  const result = await SyncAPI.fetchCloudComments(postId);
+  const comments = result.ok ? result.comments : [];
+  const listHTML = comments.length
+    ? `<div class="comments-list">${comments.map(c=>`
+        <div class="comment-row">
+          <span class="cname">${escapeHTML(c.author_nickname||'匿名用户')}</span>：${escapeHTML(c.text||'')}
+          ${c.status==='pending' ? '<span class="hint-text" style="display:inline;">（审核中，仅自己可见）</span>' : ''}
+        </div>`).join('')}</div>`
+    : `<div class="hint-text" style="padding:8px 16px;">还没有评论，来抢第一条吧</div>`;
+  wrap.innerHTML = `
+    ${listHTML}
+    <div class="comment-bar">
+      <div class="row2">
+        <input type="text" class="square-comment-input" placeholder="友善评论内容..." maxlength="500">
+        <button class="send-btn square-comment-send"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M2 21l21-9L2 3v7l15 2-15 2z"/></svg></button>
+      </div>
+    </div>`;
+  const input = wrap.querySelector('.square-comment-input');
+  const sendBtn = wrap.querySelector('.square-comment-send');
+  const doSend = async ()=>{
+    const text = input.value.trim();
+    if(!text) return;
+    if(!syncRegistered()){
+      openRegisterModal('评论需要先注册一个账号', async ()=>{
+        wrap.dataset.loaded = '';
+        toggleSquareCommentThread(postId, root); // 重新收起再展开=重新加载评论区
+        toggleSquareCommentThread(postId, root);
+      });
+      return;
+    }
+    sendBtn.disabled = true;
+    const result = await SyncAPI.submitCloudComment(postId, text);
+    sendBtn.disabled = false;
+    if(!result.ok){ showToast('评论发送失败，请稍后重试'); return; }
+    input.value = '';
+    showToast(result.status==='pending' ? '评论已提交，正在等待博主审核' : '评论已发布');
+    wrap.dataset.loaded = '';
+    wrap.style.display = 'none';
+    toggleSquareCommentThread(postId, root); // 重新加载评论列表
+  };
+  sendBtn.addEventListener('click', doSend);
+  input.addEventListener('keydown', e=>{ if(e.key==='Enter') doSend(); });
+}
+
 function setupInfiniteScroll(){
   io = new IntersectionObserver(entries=>{
     entries.forEach(en=>{
-      if(en.isIntersecting && renderedCount < filteredPosts().length){
+      if(!en.isIntersecting) return;
+      if(currentTab === 'square'){
+        if(!searchQuery.trim() && squareRenderedCount < squarePostsCache.length) renderMoreSquare();
+      } else if(renderedCount < filteredPosts().length){
         renderMore();
       }
     });
@@ -3440,15 +3848,20 @@ async function submitComment(bar, text, voice){
 }
 
 /* ---- tabs / search ---- */
-$$('.tab').forEach(t=>{
+function bindTabClick(t){
   t.addEventListener('click', ()=>{
+    const tab = t.dataset.tab;
+    // 点"本地/收藏/广场"时，如果正在看别人的主页，先退出别人主页模式，头像资料都换回自己的
+    if(tab !== 'blogger' && viewingProfile) exitBloggerProfile();
     $$('.tab').forEach(x=>x.classList.remove('active'));
     t.classList.add('active');
-    currentTab = t.dataset.tab;
+    currentTab = tab;
     renderedCount = 0;
-    renderMore();
+    if(tab === 'blogger') renderBloggerPosts();
+    else renderMore();
   });
-});
+}
+$$('.tab').forEach(bindTabClick);
 function doSearch(){
   searchQuery = $('#searchInput').value.trim();
   renderedCount = 0;
@@ -3488,7 +3901,7 @@ async function loadProfile(){
   $('#avatarImg').src = avatar ? URL.createObjectURL(avatar.value) : placeholderAvatar();
   $('#coverImg').src = cover ? URL.createObjectURL(cover.value) : placeholderCover();
   $('#displayName').textContent = nickname ? nickname.value : '输入用户名';
-  $('#bioText').textContent = bio ? bio.value : '要好好享受生活。。。';
+  $('#bioText').textContent = bio ? bio.value : '好好享受生活。。。';
 }
 function placeholderAvatar(){
   return 'data:image/svg+xml;utf8,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect width="100" height="100" fill="#8a8a8e"/><circle cx="50" cy="38" r="18" fill="#c9c9cc"/><ellipse cx="50" cy="88" rx="30" ry="24" fill="#c9c9cc"/></svg>`);
@@ -3503,11 +3916,12 @@ async function setAvatar(file){
     $('#avatarImg').src = URL.createObjectURL(blob);
     showToast('头像已更新');
     await loadFeed(true);
+    syncProfileFieldIfRegistered(); // 已登录的话，头像也要跟着同步到云端数据库
   }catch(e){ showToast('头像更新失败'); }
 }
 $('#avatarImg').addEventListener('click', (e)=>{
   e.stopPropagation();
-  if(viewMode!=='owner') return;
+  if(viewMode!=='owner' || viewingProfile) return;
   openSheet('#avatarSheetOverlay');
 });
 $('#sheetAvatarCancel').addEventListener('click', ()=>closeSheet('#avatarSheetOverlay'));
@@ -3522,10 +3936,11 @@ async function setCover(file){
     await idbPut('settings', {key:'cover', value:blob});
     $('#coverImg').src = URL.createObjectURL(blob);
     showToast('背景已更新');
+    syncProfileFieldIfRegistered(); // 已登录的话，背景图也要跟着同步
   }catch(e){ showToast('背景更新失败'); }
 }
 $('#coverClick').addEventListener('click', (e)=>{
-  if(viewMode!=='owner') return;
+  if(viewMode!=='owner' || viewingProfile) return;
   if(e.target.closest('.header-topbar') || e.target.closest('.id-row')) return;
   openSheet('#coverSheetOverlay');
 });
@@ -3537,11 +3952,12 @@ $('#fileCoverGallery').addEventListener('change', e=>{ if(e.target.files[0]) set
 
 /* ---- 通用文本编辑弹窗（昵称/签名） ---- */
 let textEditSaveCb = null;
-function openTextEditModal(title, currentValue, maxLen, onSave){
+function openTextEditModal(title, currentValue, maxLen, onSave, saveLabel){
   $('#textEditTitle').textContent = title;
   $('#textEditInput').value = currentValue || '';
   $('#textEditInput').maxLength = maxLen;
   $('#textEditCharCount').textContent = `${(currentValue||'').length}/${maxLen}`;
+  $('#textEditSave').textContent = saveLabel || '保存';
   textEditSaveCb = onSave;
   $('#textEditOverlay').classList.add('open');
   setTimeout(()=>$('#textEditInput').focus(), 50);
@@ -3557,21 +3973,29 @@ $('#textEditSave').addEventListener('click', async ()=>{
 });
 
 $('#displayName').addEventListener('click', ()=>{
-  if(viewMode!=='owner') return;
+  if(viewMode!=='owner' || viewingProfile) return;
   openTextEditModal('修改昵称', $('#displayName').textContent, 30, async (val)=>{
     if(!val) return;
     await idbPut('settings', {key:'nickname', value:val});
     $('#displayName').textContent = val;
     await loadFeed(true);
+    syncProfileFieldIfRegistered();
   });
 });
 $('#bioText').addEventListener('click', ()=>{
-  if(viewMode!=='owner') return;
+  if(viewMode!=='owner' || viewingProfile) return;
   openTextEditModal('修改签名', $('#bioText').textContent, 60, async (val)=>{
     await idbPut('settings', {key:'bio', value:val});
     $('#bioText').textContent = val;
+    syncProfileFieldIfRegistered();
   });
 });
+// 昵称/签名/头像/背景，只要本地改了，登录状态下都要立刻推一次到云端资料——
+// 静默进行，不打断操作；失败了也不阻塞本地使用，最多下次编辑时再重试
+async function syncProfileFieldIfRegistered(){
+  if(!syncRegistered()) return;
+  try{ await pushLocalProfile(); }catch(e){ /* 静默失败，不打扰用户 */ }
+}
 
 /* =========================================================
    11. 通讯录侧栏 / 设置弹窗
@@ -3589,6 +4013,7 @@ function refreshSyncStatusUI(){
   if(syncAvailable()) status = syncRegistered() ? `已登录：${SyncState.username}` : '未注册/未登录';
   $('#syncStatusVal').textContent = status;
   $('#syncRegisterBtn').style.display = (syncAvailable() && !syncRegistered()) ? 'block' : 'none';
+  $('#syncLogoutBtn').style.display = syncRegistered() ? 'block' : 'none';
   $('#syncAccountHint').textContent = syncAvailable()
     ? '"公共"或"仅好友可见"的帖子会自动同步；"仅自己可见"的帖子永远只留在本机'
     : '同步到云端功能尚未上线，敬请期待';
@@ -3598,12 +4023,25 @@ function openSettings(){
   $('#settingsMaxImg').textContent = LIMITS.MAX_IMAGES + ' 张';
   $('#settingsMaxVid').textContent = LIMITS.MAX_VIDEOS + ' 个';
   refreshSyncStatusUI();
+  renderThemeOpts();
   $('#settingsOverlay').classList.add('open');
 }
 $('#settingsClose').addEventListener('click', ()=>$('#settingsOverlay').classList.remove('open'));
 $('#syncRegisterBtn').addEventListener('click', ()=>{
   $('#settingsOverlay').classList.remove('open');
   openRegisterModal();
+});
+$('#syncLogoutBtn').addEventListener('click', async ()=>{
+  if(!confirm('退出登录？本地内容不会丢失，但云端相关功能（广场、收藏其他人的帖子等）要重新登录才能用')) return;
+  await idbPut('settings', {key:'syncToken', value:null});
+  await idbPut('settings', {key:'syncUserId', value:null});
+  await idbPut('settings', {key:'syncUsername', value:null});
+  await idbPut('settings', {key:'syncRegistered', value:false});
+  SyncState.token = null; SyncState.userId = null; SyncState.username = null; SyncState.registered = false;
+  updatePageTitle();
+  refreshSyncStatusUI();
+  showToast('已退出登录');
+  if(currentTab === 'square' || currentTab === 'favorites') renderMore();
 });
 
 /* =========================================================
