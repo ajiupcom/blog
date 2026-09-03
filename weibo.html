@@ -204,6 +204,35 @@
       border: 2px solid var(--card);
     }
     .post-head .avatar-wrap .online-dot { width: 9px; height: 9px; right: -1px; bottom: -1px; }
+    .bell-badge {
+      position: absolute;
+      top: -2px;
+      right: -2px;
+      min-width: 16px;
+      height: 16px;
+      border-radius: 8px;
+      background: #ff3b30;
+      color: #fff;
+      font-size: 10px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 3px;
+    }
+    .moderation-item {
+      border-bottom: 1px solid var(--border);
+      padding: 12px 0;
+    }
+    .moderation-item:last-child { border-bottom: none; }
+    .moderation-item .m-post-snippet { font-size: 12px; color: var(--text-faint); margin-bottom: 4px; }
+    .moderation-item .m-comment { font-size: 14px; color: var(--text); margin-bottom: 8px; }
+    .moderation-item .m-actions { display: flex; gap: 8px; }
+    .moderation-item .m-actions button {
+      flex: 1; padding: 7px; border-radius: 8px; border: none; font-size: 12.5px; cursor: pointer;
+    }
+    .moderation-item .approve-btn { background: var(--accent); color: #fff; }
+    .moderation-item .reject-btn { background: var(--input-bg); color: var(--text); }
 
     .edit-pencil {
       position: absolute;
@@ -1600,9 +1629,6 @@
         <button class="icon-btn" id="contactsBtn" title="通讯录">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.5-7 8-7s8 3 8 7"/></svg>
         </button>
-        <button class="icon-btn" id="homeBtn" title="返回我的本地主页">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9.5 12 3l9 6.5V21a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/></svg>
-        </button>
       </div>
       <div id="topRightIcons" style="display:flex;gap:8px;"></div>
     </div>
@@ -1814,6 +1840,18 @@
 </div>
 
 <!-- ===== register / login modals ===== -->
+<div class="modal-overlay" id="moderationOverlay">
+  <div class="modal" style="max-height:75vh;">
+    <div class="modal-head">
+      <button id="moderationClose">关闭</button>
+      <span class="title">评论审核</span>
+      <span style="width:40px;"></span>
+    </div>
+    <div class="modal-body" id="moderationBody">
+      <div class="hint-text">正在加载…</div>
+    </div>
+  </div>
+</div>
 <div class="modal-overlay" id="registerOverlay">
   <div class="modal" style="max-height:80vh;">
     <div class="modal-head">
@@ -2049,13 +2087,26 @@ async function pushLocalProfile(){
   const [avatarRow, coverRow] = await Promise.all([idbGet('settings','avatar'), idbGet('settings','cover')]);
   const body = { nickname: $('#displayName').textContent, bio: $('#bioText').textContent };
   // 只有本地真的有头像/背景时才带上这两个字段——不然会把云端已经存在的头像/背景覆盖成 null
-  if(avatarRow) body.avatar_url = await SyncAPI.uploadMedia(avatarRow.value, {type:'image'});
-  if(coverRow) body.cover_url = await SyncAPI.uploadMedia(coverRow.value, {type:'image'});
-  await fetch(SyncState.endpoint.replace(/\/$/,'') + '/api/profile', {
+  // 头像和背景各自单独 try/catch：以前两者共用一次 await，只要有一个上传失败
+  // 整个函数就会直接抛出，连昵称/签名、以及另一张图都不会同步——用户改了头像，
+  // 结果因为背景图偶发上传失败，头像也跟着白改了，且没有任何提示。
+  let uploadFailed = false;
+  if(avatarRow){
+    try{ body.avatar_url = await SyncAPI.uploadMedia(avatarRow.value, {type:'image'}); }
+    catch(e){ uploadFailed = true; }
+  }
+  if(coverRow){
+    try{ body.cover_url = await SyncAPI.uploadMedia(coverRow.value, {type:'image'}); }
+    catch(e){ uploadFailed = true; }
+  }
+  const res = await fetch(SyncState.endpoint.replace(/\/$/,'') + '/api/profile', {
     method:'POST',
     headers:{'content-type':'application/json','authorization':'Bearer '+SyncState.token},
     body: JSON.stringify(body)
   });
+  // 之前这里完全静默，即使同步彻底失败用户也毫无感知，看起来就像"改了头像/背景但没同步"。
+  // 现在把失败情况往上抛，让调用方能提示用户。
+  if(!res.ok || uploadFailed) throw new Error('profile sync incomplete');
 }
 
 const SyncAPI = {
@@ -2194,12 +2245,12 @@ const SyncAPI = {
       return {ok:true, comments:data.comments||[]};
     }catch(err){ return {ok:false, comments:[]}; }
   },
-  async submitCloudComment(postId, text){
+  async submitCloudComment(postId, text, voice){
     if(!syncRegistered()) return {ok:false, reason:'not-registered'};
     try{
       const res = await fetch(SyncState.endpoint.replace(/\/$/,'') + '/api/comments', {
         method:'POST', headers:{'content-type':'application/json','authorization':'Bearer '+SyncState.token},
-        body: JSON.stringify({postId, text})
+        body: JSON.stringify({postId, text, voice: voice||undefined})
       });
       if(!res.ok) return {ok:false};
       return {ok:true, ...(await res.json())};
@@ -2244,6 +2295,38 @@ const SyncAPI = {
       });
       return {ok:res.ok};
     }catch(err){ return {ok:false}; }
+  },
+  async fetchPendingCommentCount(){
+    if(!syncRegistered()) return {ok:false, count:0};
+    try{
+      const res = await fetch(SyncState.endpoint.replace(/\/$/,'') + '/api/comments/pending-count', {
+        headers:{'authorization':'Bearer '+SyncState.token}
+      });
+      if(!res.ok) return {ok:false, count:0};
+      const data = await res.json();
+      return {ok:true, count:data.count||0};
+    }catch(err){ return {ok:false, count:0}; }
+  },
+  async fetchPendingComments(){
+    if(!syncRegistered()) return {ok:false, comments:[]};
+    try{
+      const res = await fetch(SyncState.endpoint.replace(/\/$/,'') + '/api/comments/pending', {
+        headers:{'authorization':'Bearer '+SyncState.token}
+      });
+      if(!res.ok) return {ok:false, comments:[]};
+      const data = await res.json();
+      return {ok:true, comments:data.comments||[]};
+    }catch(err){ return {ok:false, comments:[]}; }
+  },
+  async moderateComment(commentId, action){
+    if(!syncRegistered()) return {ok:false};
+    try{
+      const res = await fetch(SyncState.endpoint.replace(/\/$/,'') + `/api/comments/${commentId}/moderate`, {
+        method:'POST', headers:{'content-type':'application/json','authorization':'Bearer '+SyncState.token},
+        body: JSON.stringify({action})
+      });
+      return {ok:res.ok};
+    }catch(err){ return {ok:false}; }
   }
 };
 
@@ -2251,11 +2334,15 @@ const SyncAPI = {
    2b. 注册 / 登录弹窗
 ========================================================= */
 let authSuccessCallback = null; // 注册/登录成功后要恢复的原始操作（比如"收藏"这一次点击）
-function openRegisterModal(reason, onSuccess){
+async function openRegisterModal(reason, onSuccess){
   if(!syncAvailable()){ showToast('同步功能尚未上线'); return; }
   authSuccessCallback = onSuccess || null;
   $('#registerReason').textContent = reason || '注册后，你的公开内容会同步到云端，还能收藏其他博主的帖子';
-  $('#registerAvatarPreview').src = $('#avatarImg').src;
+  // 注意：这里不能直接用 $('#avatarImg').src——那个是当前页面正在显示的头像，
+  // 如果用户正在看别人的主页（viewingProfile），header 会被换成对方的头像/资料，
+  // 这里读到的就会是别人的头像。必须直接从本地设置里读"我自己"的头像。
+  const avatarRow = await idbGet('settings','avatar');
+  $('#registerAvatarPreview').src = avatarRow ? URL.createObjectURL(avatarRow.value) : placeholderAvatar();
   $('#registerUsername').value = '';
   $('#registerPassword').value = '';
   $('#registerPassword2').value = '';
@@ -2305,6 +2392,9 @@ $('#registerSubmit').addEventListener('click', async ()=>{
   if(username.length < 3){ errEl.textContent = '用户名至少3个字符'; return; }
   if(pw.length < 6){ errEl.textContent = '密码至少6位'; return; }
   if(pw !== pw2){ errEl.textContent = '两次密码不一致'; return; }
+  const btn = $('#registerSubmit');
+  const originalLabel = btn.textContent;
+  btn.disabled = true; btn.textContent = '注册中…';
   try{
     const res = await fetch(SyncState.endpoint.replace(/\/$/,'') + '/api/register', {
       method:'POST', headers:{'content-type':'application/json'},
@@ -2316,6 +2406,7 @@ $('#registerSubmit').addEventListener('click', async ()=>{
     $('#registerOverlay').classList.remove('open');
     await afterAuthSuccess();
   }catch(e){ errEl.textContent = '网络错误，请稍后重试'; }
+  finally{ btn.disabled = false; btn.textContent = originalLabel; }
 });
 $('#loginSubmit').addEventListener('click', async ()=>{
   const username = $('#loginUsername').value.trim();
@@ -2323,6 +2414,9 @@ $('#loginSubmit').addEventListener('click', async ()=>{
   const errEl = $('#loginError');
   errEl.textContent = '';
   if(!username || !pw){ errEl.textContent = '请输入用户名和密码'; return; }
+  const btn = $('#loginSubmit');
+  const originalLabel = btn.textContent;
+  btn.disabled = true; btn.textContent = '登录中…';
   try{
     const res = await fetch(SyncState.endpoint.replace(/\/$/,'') + '/api/login', {
       method:'POST', headers:{'content-type':'application/json'},
@@ -2334,6 +2428,7 @@ $('#loginSubmit').addEventListener('click', async ()=>{
     $('#loginOverlay').classList.remove('open');
     await afterAuthSuccess();
   }catch(e){ errEl.textContent = '网络错误，请稍后重试'; }
+  finally{ btn.disabled = false; btn.textContent = originalLabel; }
 });
 function updatePageTitle(){
   document.title = syncRegistered() ? `${SyncState.username} · 微博` : '多媒体记事本 · 微博';
@@ -2371,7 +2466,59 @@ $$('.theme-opt').forEach(el=>{
 });
 initTheme();
 
-$('#homeBtn').addEventListener('click', ()=>{
+/* =========================================================
+   4. 视图模式：owner（博主）/ visitor（访客），本地演示切换
+========================================================= */
+let viewMode = localStorage.getItem('weibo_view') || 'owner';
+let viewingProfile = null; // 非空时代表正在看别人的主页 {id,nickname,avatarUrl,coverUrl,bio,online,isFriend}
+
+async function refreshBellBadge(){
+  const badge = $('#bellBadge');
+  if(!badge) return; // 当前不在博主视角，铃铛不在页面上
+  if(!syncRegistered()){ badge.style.display = 'none'; return; }
+  const result = await SyncAPI.fetchPendingCommentCount();
+  if(result.ok && result.count > 0){
+    badge.textContent = result.count > 99 ? '99+' : String(result.count);
+    badge.style.display = 'flex';
+  } else {
+    badge.style.display = 'none';
+  }
+}
+async function openModerationPanel(){
+  const body = $('#moderationBody');
+  $('#moderationOverlay').classList.add('open');
+  if(!syncRegistered()){
+    body.innerHTML = `<div class="hint-text">登录后才能查看和审核评论</div>`;
+    return;
+  }
+  body.innerHTML = `<div class="hint-text">正在加载…</div>`;
+  const result = await SyncAPI.fetchPendingComments();
+  if(!result.ok){ body.innerHTML = `<div class="hint-text">加载失败，请稍后重试</div>`; return; }
+  if(!result.comments.length){ body.innerHTML = `<div class="hint-text">暂时没有待审核的评论</div>`; return; }
+  body.innerHTML = result.comments.map(c=>`
+    <div class="moderation-item" data-id="${c.id}">
+      <div class="m-post-snippet">在你的帖子"${escapeHTML((c.post_text||'').slice(0,30))}${(c.post_text||'').length>30?'…':''}"下</div>
+      <div class="m-comment"><b>${escapeHTML(c.commenter_nickname||'匿名用户')}</b>：${c.text ? escapeHTML(c.text) : '[语音评论]'}</div>
+      <div class="m-actions">
+        <button class="approve-btn" data-action="approved">通过</button>
+        <button class="reject-btn" data-action="rejected">拒绝</button>
+      </div>
+    </div>`).join('');
+  $$('.moderation-item button', body).forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      const item = btn.closest('.moderation-item');
+      const result = await SyncAPI.moderateComment(item.dataset.id, btn.dataset.action);
+      if(!result.ok){ showToast('操作失败，请稍后重试'); return; }
+      item.remove();
+      showToast(btn.dataset.action==='approved' ? '已通过' : '已拒绝');
+      refreshBellBadge();
+      if(!$('.moderation-item', body)) body.innerHTML = `<div class="hint-text">暂时没有待审核的评论</div>`;
+    });
+  });
+}
+$('#moderationClose').addEventListener('click', ()=>$('#moderationOverlay').classList.remove('open'));
+
+function goHome(){
   viewMode = 'owner';
   localStorage.setItem('weibo_view', 'owner');
   currentTab = 'all';
@@ -2384,62 +2531,35 @@ $('#homeBtn').addEventListener('click', ()=>{
   loadProfile();
   renderHeaderOnlineDot();
   applyViewMode();
-});
-
-/* =========================================================
-   4. 视图模式：owner（博主）/ visitor（访客），本地演示切换
-========================================================= */
-let viewMode = localStorage.getItem('weibo_view') || 'owner';
-let viewingProfile = null; // 非空时代表正在看别人的主页 {id,nickname,avatarUrl,coverUrl,bio,online,isFriend}
-
+}
 function renderTopRightIcons(){
   const wrap = $('#topRightIcons');
-  if(viewingProfile){
-    const online = !!viewingProfile.online;
+  // 访客视角 / 正在看别人的主页：右边统一是"主页 + 设置"——语音视频通话以后放到通讯录的好友名字旁边，
+  // 举报入口以后也一起挪过去，这里先简化掉
+  if(viewingProfile || viewMode !== 'owner'){
     wrap.innerHTML = `
-      <button class="icon-btn" id="callBtn" title="语音通话" style="${online?'background:#2ecc71;':''}">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6 19.8 19.8 0 0 1-3.1-8.7A2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1.1.4 2.1.7 3.1a2 2 0 0 1-.5 2.1L8 10.1a16 16 0 0 0 6 6l1.2-1.3a2 2 0 0 1 2.1-.5c1 .3 2 .6 3.1.7a2 2 0 0 1 1.6 2z"/></svg>
-      </button>
-      <button class="icon-btn" id="videoCallBtn" title="视频通话" style="${online?'background:#2ecc71;':''}">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
-      </button>
-      <button class="icon-btn" id="moreBtn" title="更多">
-        <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
-      </button>`;
-    $('#callBtn').addEventListener('click', ()=>showToast(viewingProfile.isFriend===true ? (online?'语音通话功能开发中':'对方不在线') : '需先添加为好友，功能开发中'));
-    $('#videoCallBtn').addEventListener('click', ()=>showToast(viewingProfile.isFriend===true ? (online?'视频通话功能开发中':'对方不在线') : '需先添加为好友，功能开发中'));
-    $('#moreBtn').addEventListener('click', ()=>{
-      if(confirm('举报该博主？')) showToast('举报已提交，感谢反馈');
-    });
-    return;
-  }
-  if(viewMode === 'owner'){
-    wrap.innerHTML = `
-      <button class="icon-btn" id="bellBtn" title="消息">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+      <button class="icon-btn" id="homeBtn" title="返回我的本地主页">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9.5 12 3l9 6.5V21a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/></svg>
       </button>
       <button class="icon-btn" id="settingsBtn" title="设置">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
       </button>`;
-    $('#bellBtn').addEventListener('click', ()=>showToast('暂无新消息'));
+    $('#homeBtn').addEventListener('click', goHome);
     $('#settingsBtn').addEventListener('click', openSettings);
-  } else {
-    wrap.innerHTML = `
-      <button class="icon-btn" id="callBtn" title="语音通话">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6 19.8 19.8 0 0 1-3.1-8.7A2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1.1.4 2.1.7 3.1a2 2 0 0 1-.5 2.1L8 10.1a16 16 0 0 0 6 6l1.2-1.3a2 2 0 0 1 2.1-.5c1 .3 2 .6 3.1.7a2 2 0 0 1 1.6 2z"/></svg>
-      </button>
-      <button class="icon-btn" id="videoCallBtn" title="视频通话">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
-      </button>
-      <button class="icon-btn" id="moreBtn" title="更多">
-        <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
-      </button>`;
-    $('#callBtn').addEventListener('click', ()=>showToast('需先添加为好友，功能开发中'));
-    $('#videoCallBtn').addEventListener('click', ()=>showToast('需先添加为好友，功能开发中'));
-    $('#moreBtn').addEventListener('click', ()=>{
-      if(confirm('举报或拉黑该博主？')) showToast('已提交，感谢反馈');
-    });
+    return;
   }
+  // 博主自己的视角：铃铛（评论审核角标）+ 设置
+  wrap.innerHTML = `
+    <button class="icon-btn" id="bellBtn" title="消息" style="position:relative;">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+      <span class="bell-badge" id="bellBadge" style="display:none;"></span>
+    </button>
+    <button class="icon-btn" id="settingsBtn" title="设置">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+    </button>`;
+  $('#bellBtn').addEventListener('click', openModerationPanel);
+  $('#settingsBtn').addEventListener('click', openSettings);
+  refreshBellBadge();
 }
 function applyViewMode(){
   $('#openComposer').style.display = viewMode==='owner' ? 'flex' : 'none';
@@ -3117,9 +3237,9 @@ function commentsHTML(comments){
   const more = comments.length>3 ? `<div class="more-comments">查看全部 ${comments.length} 条评论</div>` : '';
   return `<div class="comments-list">${rows}</div>${more}`;
 }
-function commentBarHTML(postId){
+function commentBarHTML(postId, extraClass){
   return `
-  <div class="comment-bar" data-post="${postId}">
+  <div class="comment-bar${extraClass?' '+extraClass:''}" data-post="${postId}">
     <div class="row1">
       <svg class="mic-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/></svg>
       <svg class="emoji-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
@@ -3602,24 +3722,46 @@ async function toggleSquareCommentThread(postId, root){
   const comments = result.ok ? result.comments : [];
   const listHTML = comments.length
     ? `<div class="comments-list">${comments.map(c=>`
-        <div class="comment-row">
-          <span class="cname">${escapeHTML(c.author_nickname||'匿名用户')}</span>：${escapeHTML(c.text||'')}
+        <div class="comment-row${c.voice_url?' comment-row-voice':''}">
+          <span class="cname">${escapeHTML(c.author_nickname||'匿名用户')}</span>${c.voice_url ? '' : '：'}${c.voice_url ? remoteVoiceHTML({url:c.voice_url, duration:c.voice_duration}) : escapeHTML(c.text||'')}
           ${c.status==='pending' ? '<span class="hint-text" style="display:inline;">（审核中，仅自己可见）</span>' : ''}
         </div>`).join('')}</div>`
     : `<div class="hint-text" style="padding:8px 16px;">还没有评论，来抢第一条吧</div>`;
   wrap.innerHTML = `
     ${listHTML}
-    <div class="comment-bar">
-      <div class="row2">
-        <input type="text" class="square-comment-input" placeholder="友善评论内容..." maxlength="500">
-        <button class="send-btn square-comment-send"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M2 21l21-9L2 3v7l15 2-15 2z"/></svg></button>
-      </div>
-    </div>`;
-  const input = wrap.querySelector('.square-comment-input');
-  const sendBtn = wrap.querySelector('.square-comment-send');
-  const doSend = async ()=>{
-    const text = input.value.trim();
-    if(!text) return;
+    ${commentBarHTML(postId, 'square-comment-bar')}`;
+  const bar = wrap.querySelector('.square-comment-bar');
+  const input = wrap.querySelector('.square-comment-bar input[type=text]');
+  const sendBtn = wrap.querySelector('.square-comment-bar .send-btn');
+  const panel = wrap.querySelector('.square-comment-bar .emoji-panel');
+  panel.innerHTML = EMOJIS.map(e=>`<span>${e}</span>`).join('');
+  wrap.querySelector('.square-comment-bar .emoji-icon').addEventListener('click', ()=>panel.classList.toggle('open'));
+  $$('span', panel).forEach(span=>{
+    span.addEventListener('click', ()=>{ input.value += span.textContent; input.focus(); });
+  });
+  wrap.querySelector('.square-comment-bar .img-icon').addEventListener('click', ()=>showToast('评论图片将在同步功能上线后开放'));
+  $$('.voice-note', wrap).forEach(el=>{
+    if(el.dataset.bound) return; el.dataset.bound='1';
+    el.addEventListener('click', ()=>{
+      if(el._audio && !el._audio.paused){ el._audio.pause(); return; }
+      $$('.voice-note').forEach(other=>{ if(other._audio) other._audio.pause(); other.classList.remove('playing'); });
+      if(!el._audio){
+        el._audio = new Audio(el.dataset.audio);
+        el._audio.addEventListener('play', ()=>{ el.classList.add('playing'); });
+        el._audio.addEventListener('pause', ()=>{ el.classList.remove('playing'); });
+        el._audio.addEventListener('ended', ()=>{ el.classList.remove('playing'); });
+      } else if(el._audio.ended){
+        el._audio.currentTime = 0;
+      }
+      el._audio.play();
+    });
+  });
+  const refreshThread = ()=>{
+    wrap.dataset.loaded = '';
+    wrap.style.display = 'none';
+    toggleSquareCommentThread(postId, root); // 重新加载评论列表
+  };
+  const submitAndRefresh = async (text, voice)=>{
     if(!syncRegistered()){
       openRegisterModal('评论需要先注册一个账号', async ()=>{
         wrap.dataset.loaded = '';
@@ -3629,17 +3771,53 @@ async function toggleSquareCommentThread(postId, root){
       return;
     }
     sendBtn.disabled = true;
-    const result = await SyncAPI.submitCloudComment(postId, text);
+    let voicePayload = null;
+    if(voice){
+      try{
+        const url = await SyncAPI.uploadMedia(voice.blob, {type:'voice'});
+        voicePayload = {url, duration: voice.duration};
+      }catch(e){ sendBtn.disabled = false; showToast('语音上传失败，请稍后重试'); return; }
+    }
+    const result = await SyncAPI.submitCloudComment(postId, text||'', voicePayload);
     sendBtn.disabled = false;
     if(!result.ok){ showToast('评论发送失败，请稍后重试'); return; }
-    input.value = '';
+    if(input) input.value = '';
     showToast(result.status==='pending' ? '评论已提交，正在等待博主审核' : '评论已发布');
-    wrap.dataset.loaded = '';
-    wrap.style.display = 'none';
-    toggleSquareCommentThread(postId, root); // 重新加载评论列表
+    refreshThread();
+  };
+  const doSend = () => {
+    const text = input.value.trim();
+    if(!text) return;
+    submitAndRefresh(text, null);
+    panel.classList.remove('open');
   };
   sendBtn.addEventListener('click', doSend);
   input.addEventListener('keydown', e=>{ if(e.key==='Enter') doSend(); });
+
+  const commentRecorder = createRecorder(LIMITS.MAX_VOICE_SEC_COMMENT);
+  wrap.querySelector('.square-comment-bar .mic-icon').addEventListener('click', async ()=>{
+    if(bar.classList.contains('recording')) return;
+    try{
+      bar.classList.add('recording');
+      wrap.querySelector('.square-comment-bar .rec-bar-fill').style.width = '0%';
+      await commentRecorder.start(
+        sec => {
+          wrap.querySelector('.square-comment-bar .rec-txt').textContent = `录音中 ${fmtDur(sec)} / 0:30`;
+          wrap.querySelector('.square-comment-bar .rec-bar-fill').style.width = Math.min(100, sec/LIMITS.MAX_VOICE_SEC_COMMENT*100) + '%';
+        },
+        async result => { bar.classList.remove('recording'); if(result) submitAndRefresh(null, result); }
+      );
+    }catch(err){
+      bar.classList.remove('recording');
+      showToast(err.message || '无法访问麦克风');
+    }
+  });
+  wrap.querySelector('.square-comment-bar .send-rec').addEventListener('click', async ()=>{
+    const result = await commentRecorder.stop();
+    bar.classList.remove('recording');
+    if(result) submitAndRefresh(null, result);
+  });
+  wrap.querySelector('.square-comment-bar .cancel-rec').addEventListener('click', async ()=>{ await commentRecorder.stop(); bar.classList.remove('recording'); });
 }
 
 function setupInfiniteScroll(){
@@ -3656,11 +3834,24 @@ function setupInfiniteScroll(){
   io.observe($('#loadSentinel'));
 }
 
-function bindNewPostEvents(root){
+function bindExpandLinks(root){
   $$('.expand-link', root).forEach(el=>{
     if(el.dataset.bound) return; el.dataset.bound='1';
-    el.addEventListener('click', ()=>{ el.parentElement.innerHTML = escapeHTML(decodeURIComponent(el.dataset.full)); });
+    el.addEventListener('click', ()=>{
+      const container = el.parentElement;
+      const full = decodeURIComponent(el.dataset.full);
+      container.innerHTML = `${escapeHTML(full)} <span class="expand-link collapse-link" data-full="${el.dataset.full}">收起</span>`;
+      const collapseEl = $('.collapse-link', container);
+      collapseEl.dataset.bound = '1';
+      collapseEl.addEventListener('click', ()=>{
+        container.innerHTML = `${escapeHTML(full).slice(0,88)}… <span class="expand-link" data-full="${collapseEl.dataset.full}">全文</span>`;
+        bindExpandLinks(container);
+      });
+    });
   });
+}
+function bindNewPostEvents(root){
+  bindExpandLinks(root);
   $$('.like-btn', root).forEach(btn=>{
     if(btn.dataset.bound) return; btn.dataset.bound='1';
     btn.addEventListener('click', async ()=>{
@@ -3944,7 +4135,8 @@ async function setCover(file){
 }
 $('#coverClick').addEventListener('click', (e)=>{
   if(viewMode!=='owner' || viewingProfile) return;
-  if(e.target.closest('.header-topbar') || e.target.closest('.id-row')) return;
+  // 头像/昵称/签名各自的点击都会 stopPropagation，能冒泡到这里的
+  // 就一定是点在背景本身（或空白区域），不用再猜测排除哪些子元素
   openSheet('#coverSheetOverlay');
 });
 $('#sheetCoverCancel').addEventListener('click', ()=>closeSheet('#coverSheetOverlay'));
@@ -3997,12 +4189,14 @@ $('#bioText').addEventListener('click', ()=>{
 // 静默进行，不打断操作；失败了也不阻塞本地使用，最多下次编辑时再重试
 async function syncProfileFieldIfRegistered(){
   if(!syncRegistered()) return;
-  try{ await pushLocalProfile(); }catch(e){ /* 静默失败，不打扰用户 */ }
+  try{ await pushLocalProfile(); }
+  catch(e){ showToast('云端同步失败，请检查网络后重试'); }
 }
 
 /* =========================================================
    11. 通讯录侧栏 / 设置弹窗
 ========================================================= */
+$('.header-topbar').addEventListener('click', e=>e.stopPropagation()); // 顶栏任何按钮都不该触发背景换图
 $('#contactsBtn').addEventListener('click', ()=>{
   $('#contactsSidebar').classList.add('open');
   $('#sidebarOverlay').classList.add('open');
