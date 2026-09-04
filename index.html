@@ -233,6 +233,11 @@
     }
     .moderation-item .approve-btn { background: var(--accent); color: #fff; }
     .moderation-item .reject-btn { background: var(--input-bg); color: var(--text); }
+    .moderation-section-title {
+      font-size: 12.5px; font-weight: 700; color: var(--text-faint);
+      padding: 10px 0 4px;
+    }
+    .moderation-section + .moderation-section { margin-top: 4px; border-top: 1px solid var(--border); }
 
     .edit-pencil {
       position: absolute;
@@ -721,10 +726,20 @@
       color: var(--accent);
       font-weight: 600;
     }
+    .comment-row .ctime {
+      display: inline-block;
+      margin-left: 6px;
+      font-size: 11px;
+      color: var(--text-faint);
+    }
     .comment-row-voice {
       display: flex;
       align-items: center;
+      flex-wrap: wrap;
       gap: 8px;
+    }
+    .comment-row-voice .ctime {
+      margin-left: 0;
     }
     .voice-note-sm {
       margin: 0 !important;
@@ -1361,9 +1376,169 @@
     }
 
     .sidebar-body {
-      padding: 16px 18px;
+      padding: 6px 0;
       flex: 1;
+      overflow-y: auto;
     }
+
+    /* ---------- 通讯录 ---------- */
+    .contact-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 18px;
+      cursor: pointer;
+    }
+    .contact-row:active { background: var(--input-bg); }
+    .contact-name {
+      flex: 1;
+      font-size: 14.5px;
+      font-weight: 600;
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .contact-unread {
+      min-width: 18px;
+      height: 18px;
+      border-radius: 9px;
+      background: #ff3b30;
+      color: #fff;
+      font-size: 11px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 5px;
+      flex-shrink: 0;
+    }
+
+    /* ---------- 聊天窗口 ---------- */
+    .chat-overlay {
+      position: fixed;
+      inset: 0;
+      background: var(--card);
+      z-index: 200;
+      display: none;
+      flex-direction: column;
+    }
+    .chat-overlay.open { display: flex; }
+    .chat-head {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .chat-icon-btn {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: var(--input-bg);
+      border: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-dim);
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    .chat-icon-btn svg { width: 17px; height: 17px; }
+    .chat-back-btn { background: none; font-size: 22px; color: var(--text); width: 28px; }
+    .chat-head .avatar-wrap { position: relative; flex-shrink: 0; }
+    .chat-head .avatar { width: 36px; height: 36px; }
+    .chat-head-info { flex: 1; min-width: 0; }
+    .chat-head-name { font-size: 15px; font-weight: 700; color: var(--text); }
+    .chat-head-status { font-size: 11.5px; color: var(--text-faint); }
+    .chat-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .chat-date-divider {
+      text-align: center;
+      font-size: 11.5px;
+      color: var(--text-faint);
+      margin: 4px 0;
+    }
+    .chat-msg-row { display: flex; align-items: flex-end; gap: 8px; max-width: 82%; }
+    .chat-msg-row.mine { align-self: flex-end; flex-direction: row-reverse; }
+    .chat-msg-row .avatar { width: 30px; height: 30px; flex-shrink: 0; }
+    .chat-bubble {
+      background: var(--input-bg);
+      color: var(--text);
+      padding: 9px 13px;
+      border-radius: 14px;
+      font-size: 14px;
+      line-height: 1.5;
+      word-break: break-word;
+    }
+    .chat-msg-row.mine .chat-bubble { background: var(--accent); color: #fff; }
+    .chat-msg-row.mine .chat-bubble .voice-note { background: rgba(255,255,255,.18); }
+    .chat-msg-time {
+      font-size: 10.5px;
+      color: var(--text-faint);
+      margin: 0 4px 4px;
+      align-self: flex-end;
+    }
+    .chat-input-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 12px;
+      border-top: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .chat-input-bar input[type=text] {
+      flex: 1;
+      background: var(--input-bg);
+      border: none;
+      border-radius: 18px;
+      padding: 9px 14px;
+      font-size: 14px;
+      color: var(--text);
+      outline: none;
+    }
+    .chat-send-btn {
+      width: 32px; height: 32px; border-radius: 50%;
+      background: var(--accent); color: #fff; border: none;
+      display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0;
+    }
+    .chat-send-btn svg { width: 15px; height: 15px; }
+    .chat-emoji-panel {
+      display: none;
+      flex-wrap: wrap;
+      gap: 6px;
+      padding: 10px 14px;
+      max-height: 140px;
+      overflow-y: auto;
+      border-top: 1px solid var(--border);
+      font-size: 20px;
+    }
+    .chat-emoji-panel.open { display: flex; }
+    .chat-emoji-panel span { cursor: pointer; padding: 2px; }
+    .chat-recording-bar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      border-top: 1px solid var(--border);
+    }
+    .chat-recording-bar .rec-track {
+      flex: 1; height: 4px; background: var(--input-bg); border-radius: 2px; overflow: hidden;
+    }
+    .chat-recording-bar .rec-fill { height: 100%; background: var(--accent); width: 0%; }
+    .chat-recording-bar .rec-label { font-size: 12.5px; color: var(--text-dim); white-space: nowrap; }
+    .chat-recording-bar button {
+      border: none; border-radius: 14px; padding: 6px 12px; font-size: 12.5px; cursor: pointer;
+    }
+    .chat-recording-bar .rec-cancel { background: var(--input-bg); color: var(--text-dim); }
+    .chat-recording-bar .rec-send { background: var(--accent); color: #fff; }
 
     /* ---------- toast / empty ---------- */
     .toast {
@@ -1898,8 +2073,49 @@
 <div class="sidebar" id="contactsSidebar">
   <div class="sidebar-head">通讯录</div>
 
-  <div class="sidebar-body">
-    <div class="empty-state" style="padding:30px 10px;">好友功能即将上线<br>届时可在这里查看好友并发起语音/视频通话</div>
+  <div class="sidebar-body" id="contactsBody">
+    <div class="empty-state" style="padding:30px 10px;">登录后可在这里查看好友并发起聊天</div>
+  </div>
+</div>
+
+<!-- ===== chat window ===== -->
+<div class="chat-overlay" id="chatOverlay">
+  <div class="chat-head">
+    <button class="chat-icon-btn chat-back-btn" id="chatBackBtn">‹</button>
+    <span class="avatar-wrap"><img class="avatar" id="chatAvatar" alt=""><span class="online-dot" id="chatOnlineDot" style="display:none;"></span></span>
+    <div class="chat-head-info">
+      <div class="chat-head-name" id="chatName"></div>
+      <div class="chat-head-status" id="chatStatus"></div>
+    </div>
+    <button class="chat-icon-btn" id="chatCallBtn" title="语音通话">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+    </button>
+    <button class="chat-icon-btn" id="chatVideoBtn" title="视频通话">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+    </button>
+  </div>
+  <div class="chat-body" id="chatBody"></div>
+  <div class="chat-emoji-panel" id="chatEmojiPanel"></div>
+  <div class="chat-recording-bar" id="chatRecordingBar" style="display:none;">
+    <span class="rec-label" id="chatRecLabel">录音中 0:00 / 1:00</span>
+    <div class="rec-track"><div class="rec-fill" id="chatRecFill"></div></div>
+    <button class="rec-cancel" id="chatRecCancel">取消</button>
+    <button class="rec-send" id="chatRecSend">发送</button>
+  </div>
+  <div class="chat-input-bar" id="chatInputBar">
+    <button class="chat-icon-btn" id="chatMicIcon" title="语音">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/></svg>
+    </button>
+    <button class="chat-icon-btn" id="chatEmojiIcon" title="表情">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
+    </button>
+    <button class="chat-icon-btn" id="chatImgIcon" title="图片">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+    </button>
+    <input type="text" id="chatInput" placeholder="发消息...">
+    <button class="chat-send-btn" id="chatSendBtn">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M2 21l21-9L2 3v7l15 2-15 2z"/></svg>
+    </button>
   </div>
 </div>
 
@@ -1934,6 +2150,7 @@ const LIMITS = {
   MAX_VIDEO_SEC: 15,
   MAX_VOICE_SEC_POST: 60,
   MAX_VOICE_SEC_COMMENT: 30,
+  MAX_VOICE_SEC_MESSAGE: 60,
 };
 const PAGE_SIZE = 5; // 每次懒加载条数
 const SYNC_ENABLED = false;
@@ -2286,15 +2503,52 @@ const SyncAPI = {
       return {ok:res.ok};
     }catch(err){ return {ok:false}; }
   },
-  async sendMessage(toUserId, text){
+  async respondFriend(userId, action){
+    if(!syncRegistered()) return {ok:false};
+    try{
+      const res = await fetch(SyncState.endpoint.replace(/\/$/,'') + '/api/friends/respond', {
+        method:'POST', headers:{'content-type':'application/json','authorization':'Bearer '+SyncState.token},
+        body: JSON.stringify({friendId:userId, action})
+      });
+      if(!res.ok){
+        let reason = `HTTP ${res.status}`;
+        try{ const errData = await res.json(); if(errData && errData.error) reason = errData.error; }catch(e){}
+        return {ok:false, reason};
+      }
+      return {ok:true};
+    }catch(err){ return {ok:false, reason: err.message}; }
+  },
+  async sendMessage(toUserId, text, voice){
     if(!syncRegistered()) return {ok:false};
     try{
       const res = await fetch(SyncState.endpoint.replace(/\/$/,'') + '/api/messages', {
         method:'POST', headers:{'content-type':'application/json','authorization':'Bearer '+SyncState.token},
-        body: JSON.stringify({toUserId, text})
+        body: JSON.stringify({toUserId, text, voice: voice||undefined})
       });
       return {ok:res.ok};
     }catch(err){ return {ok:false}; }
+  },
+  async fetchMessageThread(withUserId){
+    if(!syncRegistered()) return {ok:false, messages:[]};
+    try{
+      const res = await fetch(SyncState.endpoint.replace(/\/$/,'') + '/api/messages?withUserId=' + encodeURIComponent(withUserId), {
+        headers:{'authorization':'Bearer '+SyncState.token}
+      });
+      if(!res.ok) return {ok:false, messages:[]};
+      const data = await res.json();
+      return {ok:true, messages:data.messages||[]};
+    }catch(err){ return {ok:false, messages:[]}; }
+  },
+  async fetchUnreadBySender(){
+    if(!syncRegistered()) return {ok:false, unreadBySender:{}};
+    try{
+      const res = await fetch(SyncState.endpoint.replace(/\/$/,'') + '/api/messages/unread-by-sender', {
+        headers:{'authorization':'Bearer '+SyncState.token}
+      });
+      if(!res.ok) return {ok:false, unreadBySender:{}};
+      const data = await res.json();
+      return {ok:true, unreadBySender:data.unreadBySender||{}};
+    }catch(err){ return {ok:false, unreadBySender:{}}; }
   },
   async fetchPendingCommentCount(){
     if(!syncRegistered()) return {ok:false, count:0};
@@ -2488,9 +2742,16 @@ async function refreshBellBadge(){
   const badge = $('#bellBadge');
   if(!badge) return; // 当前不在博主视角，铃铛不在页面上
   if(!syncRegistered()){ badge.style.display = 'none'; return; }
-  const result = await SyncAPI.fetchPendingCommentCount();
-  if(result.ok && result.count > 0){
-    badge.textContent = result.count > 99 ? '99+' : String(result.count);
+  // 铃铛数字之前只统计"待审核评论"，加好友请求进来完全没有任何提示（既不算进
+  // 数字也不出现在浮层里），博主只能靠自己想起来去别的地方看有没有人加好友。
+  // 现在把"待处理的加好友请求"也一起算进铃铛数字里，跟评论审核合并显示。
+  const [commentResult, friendResult] = await Promise.all([
+    SyncAPI.fetchPendingCommentCount(),
+    SyncAPI.fetchFriends()
+  ]);
+  const count = (commentResult.ok ? commentResult.count : 0) + (friendResult.ok ? friendResult.pendingRequests.length : 0);
+  if(count > 0){
+    badge.textContent = count > 99 ? '99+' : String(count);
     badge.style.display = 'flex';
   } else {
     badge.style.display = 'none';
@@ -2504,27 +2765,56 @@ async function openModerationPanel(){
     return;
   }
   body.innerHTML = `<div class="hint-text">正在加载…</div>`;
-  const result = await SyncAPI.fetchPendingComments();
-  if(!result.ok){ body.innerHTML = `<div class="hint-text">加载失败，请稍后重试${result.reason ? '（'+escapeHTML(result.reason)+'）' : ''}</div>`; return; }
-  if(!result.comments.length){ body.innerHTML = `<div class="hint-text">暂时没有待审核的评论</div>`; return; }
-  body.innerHTML = result.comments.map(c=>`
-    <div class="moderation-item" data-id="${c.id}">
-      <div class="m-post-snippet">在你的帖子"${escapeHTML((c.post_text||'').slice(0,30))}${(c.post_text||'').length>30?'…':''}"下</div>
-      <div class="m-comment"><b>${escapeHTML(c.commenter_nickname||'匿名用户')}</b>：${c.text ? escapeHTML(c.text) : '[语音评论]'}</div>
-      <div class="m-actions">
-        <button class="approve-btn" data-action="approved">通过</button>
-        <button class="reject-btn" data-action="rejected">拒绝</button>
-      </div>
-    </div>`).join('');
+  const [commentResult, friendResult] = await Promise.all([
+    SyncAPI.fetchPendingComments(),
+    SyncAPI.fetchFriends()
+  ]);
+  if(!commentResult.ok){ body.innerHTML = `<div class="hint-text">加载失败，请稍后重试${commentResult.reason ? '（'+escapeHTML(commentResult.reason)+'）' : ''}</div>`; return; }
+  const pendingRequests = friendResult.ok ? friendResult.pendingRequests : [];
+  const sections = [];
+  if(pendingRequests.length){
+    sections.push(`<div class="moderation-section" data-section="friend">
+      <div class="moderation-section-title">好友请求</div>
+      ${pendingRequests.map(u=>`
+      <div class="moderation-item" data-type="friend" data-uid="${u.id}">
+        <div class="m-comment"><b>${escapeHTML(u.nickname||'匿名用户')}</b> 请求加你为好友</div>
+        <div class="m-actions">
+          <button class="approve-btn" data-action="accepted">同意</button>
+          <button class="reject-btn" data-action="rejected">拒绝</button>
+        </div>
+      </div>`).join('')}
+    </div>`);
+  }
+  if(commentResult.comments.length){
+    sections.push(`<div class="moderation-section" data-section="comment">
+      <div class="moderation-section-title">评论审核</div>
+      ${commentResult.comments.map(c=>`
+      <div class="moderation-item" data-type="comment" data-id="${c.id}">
+        <div class="m-post-snippet">在你的帖子"${escapeHTML((c.post_text||'').slice(0,30))}${(c.post_text||'').length>30?'…':''}"下</div>
+        <div class="m-comment"><b>${escapeHTML(c.commenter_nickname||'匿名用户')}</b>：${c.text ? escapeHTML(c.text) : '[语音评论]'}</div>
+        <div class="m-actions">
+          <button class="approve-btn" data-action="approved">通过</button>
+          <button class="reject-btn" data-action="rejected">拒绝</button>
+        </div>
+      </div>`).join('')}
+    </div>`);
+  }
+  if(!sections.length){ body.innerHTML = `<div class="hint-text">暂时没有需要处理的通知</div>`; return; }
+  body.innerHTML = sections.join('');
   $$('.moderation-item button', body).forEach(btn=>{
     btn.addEventListener('click', async ()=>{
       const item = btn.closest('.moderation-item');
-      const result = await SyncAPI.moderateComment(item.dataset.id, btn.dataset.action);
+      const result = item.dataset.type === 'friend'
+        ? await SyncAPI.respondFriend(item.dataset.uid, btn.dataset.action)
+        : await SyncAPI.moderateComment(item.dataset.id, btn.dataset.action);
       if(!result.ok){ showToast('操作失败，请稍后重试' + (result.reason ? '（'+result.reason+'）' : '')); return; }
       item.remove();
-      showToast(btn.dataset.action==='approved' ? '已通过' : '已拒绝');
+      showToast((btn.dataset.action==='approved'||btn.dataset.action==='accepted') ? '已通过' : '已拒绝');
       refreshBellBadge();
-      if(!$('.moderation-item', body)) body.innerHTML = `<div class="hint-text">暂时没有待审核的评论</div>`;
+      // item 已经从 DOM 移除；如果它所在的分组（好友请求/评论审核）也空了，把分组标题一起去掉，
+      // 不然会剩一个"好友请求"标题底下什么都没有，很奇怪。
+      $$('.moderation-section', body).forEach(sec=>{ if(!$('.moderation-item', sec)) sec.remove(); });
+      if(!$('.moderation-item', body)) body.innerHTML = `<div class="hint-text">暂时没有需要处理的通知</div>`;
     });
   });
 }
@@ -3241,10 +3531,13 @@ function commentsHTML(comments){
   if(!comments.length) return '';
   const shown = comments.slice(0,3);
   const rows = shown.map(c=>{
+    const time = `<span class="ctime">${fmtTime(c.createdAt)}</span>`;
+    // 以前语音和文字互斥（只要 c.voice 存在就完全不看 c.text），现在评论支持
+    // 语音+文字同时发送，这里两个都要展示，而不是丢掉其中一个。
     if(c.voice){
-      return `<div class="comment-row comment-row-voice"><span class="cname">${escapeHTML(c.author||'我')}</span>${voiceHTML(c.voice, true)}</div>`;
+      return `<div class="comment-row comment-row-voice"><span class="cname">${escapeHTML(c.author||'我')}</span>${c.text?`：${escapeHTML(c.text)}`:''}${voiceHTML(c.voice, true)}${time}</div>`;
     }
-    return `<div class="comment-row"><span class="cname">${escapeHTML(c.author||'我')}</span>：${escapeHTML(c.text||'')}</div>`;
+    return `<div class="comment-row"><span class="cname">${escapeHTML(c.author||'我')}</span>：${escapeHTML(c.text||'')}${time}</div>`;
   }).join('');
   const more = comments.length>3 ? `<div class="more-comments">查看全部 ${comments.length} 条评论</div>` : '';
   return `<div class="comments-list">${rows}</div>${more}`;
@@ -3300,7 +3593,7 @@ function postHTML(post, comments){
         ${ownerButtonsLeft}
         <div class="post-actions">
           ${viewMode==='owner' ? '' : `<button class="act-btn like-btn ${post.liked?'liked':''}">♡ 赞 ${post.likes||''}</button>`}
-          <button class="act-btn comment-toggle-btn">💬 评论</button>
+          <button class="act-btn comment-toggle-btn">💬 评论${comments.length?' '+comments.length:''}</button>
           <button class="act-btn favorite-btn ${post.favorited?'liked':''}">${post.favorited?'★':'☆'} 收藏</button>
         </div>
       </div>
@@ -3408,11 +3701,9 @@ async function renderFavorites(localFavorited){
 /* ---- 广场：跨用户的公共帖子，来自远端 ---- */
 /* ---- 别人博主主页（"假跳转"：同一个页面换一套数据） ---- */
 function openMessageModal(userId, nickname){
-  openTextEditModal(`发私信给 ${escapeHTML(nickname)}`, '', 300, async (val)=>{
-    if(!val.trim()) return;
-    const result = await SyncAPI.sendMessage(userId, val.trim());
-    showToast(result.ok ? '已发送' : '发送失败，请稍后重试');
-  }, '发送');
+  // 之前这里是个"发一条就关掉"的临时输入框，现在真正的聊天窗口已经做好了，
+  // 直接复用它，能看到历史消息、能继续对话，而不是每次都是一次性的单条私信。
+  openChatWith({ id:userId, nickname, avatarUrl: viewingProfile && Number(viewingProfile.id)===Number(userId) ? viewingProfile.avatarUrl : null, online: viewingProfile && Number(viewingProfile.id)===Number(userId) ? viewingProfile.online : false });
 }
 async function openBloggerProfile(userId){
   if(!syncAvailable()) return;
@@ -3646,12 +3937,27 @@ function squarePostHTML(post, options={}){
         ${leftGroup}
         <div class="post-actions">
           <button class="act-btn square-like-btn" data-id="${post.id}">♡ 赞</button>
-          <button class="act-btn square-comment-btn" data-id="${post.id}">💬 评论</button>
+          <button class="act-btn square-comment-btn" data-id="${post.id}">💬 评论${post.commentCount?' '+post.commentCount:''}</button>
           <button class="act-btn square-favorite-btn" data-id="${post.id}">☆ 收藏</button>
         </div>
       </div>
+      ${squareCommentsPreviewHTML(post)}
       <div class="square-comments-wrap" data-post="${post.id}" style="display:none;"></div>
     </div>`;
+}
+function squareCommentsPreviewHTML(post){
+  const top = post.topComments || [];
+  if(!top.length) return '';
+  const rows = top.map(c=>{
+    const time = `<span class="ctime">${fmtTime(c.createdAt)}</span>`;
+    if(c.voiceUrl){
+      return `<div class="comment-row comment-row-voice"><span class="cname">${escapeHTML(c.authorNickname||'匿名用户')}</span>${c.text?`：${escapeHTML(c.text)}`:''}${remoteVoiceHTML({url:c.voiceUrl, duration:c.voiceDuration})}${time}</div>`;
+    }
+    return `<div class="comment-row"><span class="cname">${escapeHTML(c.authorNickname||'匿名用户')}</span>：${escapeHTML(c.text||'')}${time}</div>`;
+  }).join('');
+  const more = (post.commentCount||0) > top.length
+    ? `<div class="more-comments square-more-comments" data-id="${post.id}">查看全部 ${post.commentCount} 条评论</div>` : '';
+  return `<div class="comments-list">${rows}</div>${more}`;
 }
 function bindSquarePostEvents(root){
   $$('.blogger-open-trigger', root).forEach(el=>{
@@ -3700,6 +4006,10 @@ function bindSquarePostEvents(root){
   $$('.square-comment-btn', root).forEach(btn=>{
     if(btn.dataset.bound) return; btn.dataset.bound='1';
     btn.addEventListener('click', ()=>toggleSquareCommentThread(btn.dataset.id, root));
+  });
+  $$('.square-more-comments', root).forEach(el=>{
+    if(el.dataset.bound) return; el.dataset.bound='1';
+    el.addEventListener('click', ()=>toggleSquareCommentThread(el.dataset.id, root));
   });
   $$('.square-favorite-btn', root).forEach(btn=>{
     btn.addEventListener('click', async ()=>{
@@ -3780,7 +4090,7 @@ async function toggleSquareCommentThread(postId, root){
   const listHTML = comments.length
     ? `<div class="comments-list">${comments.map(c=>`
         <div class="comment-row${c.voice_url?' comment-row-voice':''}">
-          <span class="cname">${escapeHTML(c.author_nickname||'匿名用户')}</span>${c.voice_url ? '' : '：'}${c.voice_url ? remoteVoiceHTML({url:c.voice_url, duration:c.voice_duration}) : escapeHTML(c.text||'')}
+          <span class="cname">${escapeHTML(c.author_nickname||'匿名用户')}</span>${c.voice_url ? (c.text?`：${escapeHTML(c.text)}`:'') : '：'+escapeHTML(c.text||'')}${c.voice_url ? remoteVoiceHTML({url:c.voice_url, duration:c.voice_duration}) : ''}<span class="ctime">${fmtTime(c.created_at)}</span>
           ${c.status==='pending' ? '<span class="hint-text" style="display:inline;">（审核中，仅自己可见）</span>' : ''}
         </div>`).join('')}</div>`
     : `<div class="hint-text" style="padding:8px 16px;">还没有评论，来抢第一条吧</div>`;
@@ -3844,6 +4154,16 @@ async function toggleSquareCommentThread(postId, root){
     if(!result.ok){ showToast('评论发送失败，请稍后重试'); return; }
     if(input) input.value = '';
     showToast(result.status==='pending' ? '评论已提交，正在等待博主审核' : '评论已发布');
+    // 评论按钮上的数字来自帖子列表接口一次性带回来的 commentCount，不会因为
+    // 这里新发了一条评论自动变化；发布成功（且不是待审核）时顺手 +1，
+    // 不然要等下次刷新整个广场列表才会看到数字变化。
+    if(result.status !== 'pending'){
+      const countBtn = root.querySelector(`.square-comment-btn[data-id="${postId}"]`);
+      if(countBtn){
+        const n = (parseInt(countBtn.textContent.replace(/\D/g,''),10) || 0) + 1;
+        countBtn.textContent = `💬 评论 ${n}`;
+      }
+    }
     refreshThread();
   };
   const doSend = () => {
@@ -3856,6 +4176,14 @@ async function toggleSquareCommentThread(postId, root){
   input.addEventListener('keydown', e=>{ if(e.key==='Enter') doSend(); });
 
   const commentRecorder = createRecorder(LIMITS.MAX_VOICE_SEC_COMMENT);
+  // 之前语音完成时永远传 text=null，导致输入框里已经打好的文字被无视，只能二选一发送。
+  // 现在录音一结束（无论自动到时还是手动点停止），都把输入框当时的文字一起带上合并发送。
+  const finishRecording = (result) => {
+    if(!result) return;
+    const text = input.value.trim();
+    input.value = '';
+    submitAndRefresh(text || null, result);
+  };
   wrap.querySelector('.square-comment-bar .mic-icon').addEventListener('click', async ()=>{
     if(bar.classList.contains('recording')) return;
     // 一定要在开始录音之前就检查是否已注册——如果录完了才发现没登录，
@@ -3877,7 +4205,7 @@ async function toggleSquareCommentThread(postId, root){
           wrap.querySelector('.square-comment-bar .rec-txt').textContent = `录音中 ${fmtDur(sec)} / 0:30`;
           wrap.querySelector('.square-comment-bar .rec-bar-fill').style.width = Math.min(100, sec/LIMITS.MAX_VOICE_SEC_COMMENT*100) + '%';
         },
-        async result => { bar.classList.remove('recording'); if(result) submitAndRefresh(null, result); }
+        async result => { bar.classList.remove('recording'); finishRecording(result); }
       );
     }catch(err){
       bar.classList.remove('recording');
@@ -3887,7 +4215,7 @@ async function toggleSquareCommentThread(postId, root){
   wrap.querySelector('.square-comment-bar .send-rec').addEventListener('click', async ()=>{
     const result = await commentRecorder.stop();
     bar.classList.remove('recording');
-    if(result) submitAndRefresh(null, result);
+    finishRecording(result);
   });
   wrap.querySelector('.square-comment-bar .cancel-rec').addEventListener('click', async ()=>{ await commentRecorder.stop(); bar.classList.remove('recording'); });
 }
@@ -4066,6 +4394,16 @@ function bindNewPostEvents(root){
     $('.img-icon', bar).addEventListener('click', ()=>showToast('评论图片将在同步功能上线后开放'));
 
     const commentRecorder = createRecorder(LIMITS.MAX_VOICE_SEC_COMMENT);
+    // 语音和文字之前是互斥的：无论是自动到时还是手动点发送结束录音，都只会带 voice、
+    // 不带 input 里已经打好的文字，导致"想连文字一起发"发不出去，只能二选一发两条。
+    // 现在录音一结束（不管是到时自动结束还是手动结束），都顺手把输入框里当时的文字
+    // 一起带上，合并成一条评论，然后再清空输入框。
+    const finishRecording = (result) => {
+      if(!result) return;
+      const text = input.value.trim();
+      input.value = '';
+      submitComment(bar, text || null, result);
+    };
     $('.mic-icon', bar).addEventListener('click', async ()=>{
       if(bar.classList.contains('recording')) return; // 录音期间该图标已隐藏，不会触发到这里
       try{
@@ -4076,7 +4414,7 @@ function bindNewPostEvents(root){
             $('.rec-txt', bar).textContent = `录音中 ${fmtDur(sec)} / 0:30`;
             $('.rec-bar-fill', bar).style.width = Math.min(100, sec/LIMITS.MAX_VOICE_SEC_COMMENT*100) + '%';
           },
-          async result => { bar.classList.remove('recording'); if(result) submitComment(bar, null, result); } // 到时自动停止发送
+          async result => { bar.classList.remove('recording'); finishRecording(result); } // 到时自动停止发送
         );
       }catch(err){
         bar.classList.remove('recording');
@@ -4086,7 +4424,7 @@ function bindNewPostEvents(root){
     $('.send-rec', bar).addEventListener('click', async ()=>{
       const result = await commentRecorder.stop();
       bar.classList.remove('recording');
-      if(result) submitComment(bar, null, result);
+      finishRecording(result);
     });
     $('.cancel-rec', bar).addEventListener('click', async ()=>{ await commentRecorder.stop(); bar.classList.remove('recording'); });
     const sendBtn = $('.send-btn', bar);
@@ -4244,7 +4582,8 @@ $('#textEditSave').addEventListener('click', async ()=>{
   if(textEditSaveCb) await textEditSaveCb(val);
 });
 
-$('#displayName').addEventListener('click', ()=>{
+$('#displayName').addEventListener('click', (e)=>{
+  e.stopPropagation();
   if(viewMode!=='owner' || viewingProfile) return;
   openTextEditModal('修改昵称', $('#displayName').textContent, 30, async (val)=>{
     if(!val) return;
@@ -4254,7 +4593,12 @@ $('#displayName').addEventListener('click', ()=>{
     syncProfileFieldIfRegistered();
   });
 });
-$('#bioText').addEventListener('click', ()=>{
+$('#bioText').addEventListener('click', (e)=>{
+  // 之前这里没有 stopPropagation，点击签名的同时事件会冒泡到 #coverClick，
+  // 导致"修改签名"弹窗和"更换背景"面板同时弹出。加上这行之后，点头像/昵称/
+  // 签名只会触发各自的编辑框，点头部其它空白区域（包括背景图本身）才会触发换背景——
+  // 效果上等价于把头部分成了"上半背景/下半签名"两块互不干扰的区域。
+  e.stopPropagation();
   if(viewMode!=='owner' || viewingProfile) return;
   openTextEditModal('修改签名', $('#bioText').textContent, 60, async (val)=>{
     await idbPut('settings', {key:'bio', value:val});
@@ -4271,17 +4615,217 @@ async function syncProfileFieldIfRegistered(){
 }
 
 /* =========================================================
-   11. 通讯录侧栏 / 设置弹窗
+   11. 通讯录侧栏 / 聊天窗口 / 设置弹窗
 ========================================================= */
 $('.header-topbar').addEventListener('click', e=>e.stopPropagation()); // 顶栏任何按钮都不该触发背景换图
 $('#contactsBtn').addEventListener('click', ()=>{
   $('#contactsSidebar').classList.add('open');
   $('#sidebarOverlay').classList.add('open');
+  renderContactsList();
 });
 $('#sidebarOverlay').addEventListener('click', ()=>{
   $('#contactsSidebar').classList.remove('open');
   $('#sidebarOverlay').classList.remove('open');
 });
+
+/* ---- 通讯录：好友列表 + 在线状态 + 未读消息数 ---- */
+async function renderContactsList(){
+  const body = $('#contactsBody');
+  if(!syncRegistered()){
+    body.innerHTML = `<div class="empty-state" style="padding:30px 10px;">登录后可在这里查看好友并发起聊天</div>`;
+    return;
+  }
+  body.innerHTML = `<div class="hint-text" style="padding:20px 18px;">正在加载…</div>`;
+  const [friendsResult, unreadResult] = await Promise.all([
+    SyncAPI.fetchFriends(),
+    SyncAPI.fetchUnreadBySender()
+  ]);
+  if(!friendsResult.ok){ body.innerHTML = `<div class="hint-text" style="padding:20px 18px;">加载失败，请稍后重试</div>`; return; }
+  const friends = friendsResult.friends;
+  if(!friends.length){ body.innerHTML = `<div class="empty-state" style="padding:30px 10px;">还没有好友，去广场加几个吧</div>`; return; }
+  const unreadBySender = unreadResult.ok ? unreadResult.unreadBySender : {};
+  const ONLINE_WINDOW_MS = 60*1000;
+  const isOnline = f => f.last_seen_at ? (Date.now() - new Date(f.last_seen_at).getTime() < ONLINE_WINDOW_MS) : false;
+  body.innerHTML = friends.map(f=>{
+    const unread = unreadBySender[f.id] || 0;
+    return `<div class="contact-row" data-uid="${f.id}">
+      <span class="avatar-wrap"><img class="avatar" src="${f.avatar_url || placeholderAvatar()}">${isOnline(f)?'<span class="online-dot"></span>':''}</span>
+      <span class="contact-name">${escapeHTML(f.remark || f.nickname || '匿名用户')}</span>
+      ${unread>0 ? `<span class="contact-unread">${unread>99?'99+':unread}</span>` : ''}
+    </div>`;
+  }).join('');
+  $$('.contact-row', body).forEach(row=>{
+    row.addEventListener('click', ()=>{
+      const f = friends.find(x=>String(x.id)===row.dataset.uid);
+      if(!f) return;
+      $('#contactsSidebar').classList.remove('open');
+      $('#sidebarOverlay').classList.remove('open');
+      openChatWith({ id:f.id, nickname:f.remark||f.nickname, avatarUrl:f.avatar_url, online:isOnline(f) });
+    });
+  });
+}
+
+/* ---- 聊天窗口：消息线程加载/展示/发送（文字+表情+语音） ---- */
+let currentChatUserId = null;
+let myAvatarUrl = null;
+async function getMyAvatarUrl(){
+  if(myAvatarUrl) return myAvatarUrl;
+  const row = await idbGet('settings','avatar');
+  myAvatarUrl = row ? URL.createObjectURL(row.value) : placeholderAvatar();
+  return myAvatarUrl;
+}
+function fmtChatDate(iso){
+  const d = new Date(iso);
+  return `${d.getMonth()+1}月${d.getDate()}日`;
+}
+function fmtChatClock(iso){
+  const d = new Date(iso);
+  const p = n=>String(n).padStart(2,'0');
+  return `${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+function bindChatVoiceNotes(root){
+  $$('.voice-note', root).forEach(el=>{
+    if(el.dataset.bound) return; el.dataset.bound='1';
+    el.addEventListener('click', ()=>{
+      if(el._audio && !el._audio.paused){ el._audio.pause(); return; }
+      $$('.voice-note').forEach(other=>{ if(other._audio) other._audio.pause(); other.classList.remove('playing'); });
+      if(!el._audio){
+        el._audio = new Audio(el.dataset.audio);
+        el._audio.addEventListener('play', ()=>{ el.classList.add('playing'); });
+        el._audio.addEventListener('pause', ()=>{ el.classList.remove('playing'); });
+        el._audio.addEventListener('ended', ()=>{ el.classList.remove('playing'); });
+      } else if(el._audio.ended){ el._audio.currentTime = 0; }
+      el._audio.play();
+    });
+  });
+}
+function chatBubbleRowHTML(mine, avatarSrc, contentHTML, timeIso){
+  return `<div class="chat-msg-row ${mine?'mine':''}">
+    <img class="avatar" src="${avatarSrc}">
+    <div class="chat-bubble">${contentHTML}</div>
+    <span class="chat-msg-time">${fmtChatClock(timeIso)}</span>
+  </div>`;
+}
+async function openChatWith(friend){
+  currentChatUserId = friend.id;
+  $('#chatAvatar').src = friend.avatarUrl || placeholderAvatar();
+  $('#chatName').textContent = friend.nickname || '匿名用户';
+  $('#chatStatus').textContent = friend.online ? '在线' : '';
+  $('#chatOnlineDot').style.display = friend.online ? 'block' : 'none';
+  $('#chatOverlay').classList.add('open');
+  $('#chatBody').innerHTML = `<div class="hint-text" style="text-align:center;padding:20px;">正在加载…</div>`;
+  await getMyAvatarUrl();
+  const result = await SyncAPI.fetchMessageThread(friend.id);
+  if(!result.ok){ $('#chatBody').innerHTML = `<div class="hint-text" style="text-align:center;padding:20px;">加载失败，请稍后重试</div>`; return; }
+  const body = $('#chatBody');
+  let lastDate = null;
+  let html = '';
+  for(const m of result.messages){
+    const dateLabel = fmtChatDate(m.created_at);
+    if(dateLabel !== lastDate){ html += `<div class="chat-date-divider">${dateLabel}</div>`; lastDate = dateLabel; }
+    const mine = Number(m.from_user_id) === Number(SyncState.userId);
+    const contentHTML = m.voice_url ? remoteVoiceHTML({url:m.voice_url, duration:m.voice_duration}) : escapeHTML(m.text||'');
+    html += chatBubbleRowHTML(mine, mine?myAvatarUrl:($('#chatAvatar').src), contentHTML, m.created_at);
+  }
+  body.innerHTML = html || `<div class="hint-text" style="text-align:center;padding:20px;">还没有消息，打个招呼吧</div>`;
+  bindChatVoiceNotes(body);
+  body.scrollTop = body.scrollHeight;
+  // 刚读完这个人的消息，未读数会清零（后端在 GET thread 时顺带标记已读）——
+  // 通讯录列表里对应的角标要跟着消失，不然退回去还显示旧数字。
+  const row = $(`.contact-row[data-uid="${friend.id}"]`);
+  if(row){ const badge = $('.contact-unread', row); if(badge) badge.remove(); }
+}
+function appendLocalChatMessage(text, voice){
+  const body = $('#chatBody');
+  if($('.hint-text', body)) body.innerHTML = ''; // 清掉"还没有消息"之类的占位提示
+  const now = new Date().toISOString();
+  const dateLabel = fmtChatDate(now);
+  const dividers = $$('.chat-date-divider', body);
+  const lastDivider = dividers[dividers.length-1];
+  if(!lastDivider || lastDivider.textContent !== dateLabel){
+    body.insertAdjacentHTML('beforeend', `<div class="chat-date-divider">${dateLabel}</div>`);
+  }
+  const contentHTML = voice ? remoteVoiceHTML({url:voice.url, duration:voice.duration}) : escapeHTML(text||'');
+  body.insertAdjacentHTML('beforeend', chatBubbleRowHTML(true, myAvatarUrl, contentHTML, now));
+  bindChatVoiceNotes(body);
+  body.scrollTop = body.scrollHeight;
+}
+$('#chatBackBtn').addEventListener('click', ()=>{
+  $('#chatOverlay').classList.remove('open');
+  currentChatUserId = null;
+});
+async function doSendChatMessage(){
+  const input = $('#chatInput');
+  const text = input.value.trim();
+  if(!text || !currentChatUserId) return;
+  input.value = '';
+  const result = await SyncAPI.sendMessage(currentChatUserId, text);
+  if(!result.ok){ showToast('发送失败，请稍后重试'); input.value = text; return; }
+  appendLocalChatMessage(text, null);
+}
+$('#chatSendBtn').addEventListener('click', doSendChatMessage);
+$('#chatInput').addEventListener('keydown', e=>{ if(e.key==='Enter') doSendChatMessage(); });
+
+const chatEmojiPanel = $('#chatEmojiPanel');
+chatEmojiPanel.innerHTML = EMOJIS.map(e=>`<span>${e}</span>`).join('');
+$('#chatEmojiIcon').addEventListener('click', ()=>chatEmojiPanel.classList.toggle('open'));
+$$('span', chatEmojiPanel).forEach(span=>{
+  span.addEventListener('click', ()=>{ $('#chatInput').value += span.textContent; $('#chatInput').focus(); });
+});
+$('#chatImgIcon').addEventListener('click', ()=>showToast('聊天图片将在同步功能上线后开放'));
+// 语音/视频通话不在这轮范围内（项目早前已明确把实时通话功能延后），点击先给出明确提示，
+// 不假装能打通，也不伪造一条"已取消"的消息骗自己。
+$('#chatCallBtn').addEventListener('click', ()=>showToast('语音通话功能开发中，敬请期待'));
+$('#chatVideoBtn').addEventListener('click', ()=>showToast('视频通话功能开发中，敬请期待'));
+
+const chatRecorder = createRecorder(LIMITS.MAX_VOICE_SEC_MESSAGE);
+$('#chatMicIcon').addEventListener('click', async ()=>{
+  if(!currentChatUserId) return;
+  try{
+    $('#chatInputBar').style.display = 'none';
+    $('#chatRecordingBar').style.display = 'flex';
+    $('#chatRecFill').style.width = '0%';
+    await chatRecorder.start(
+      sec => {
+        $('#chatRecLabel').textContent = `录音中 ${fmtDur(sec)} / ${fmtDur(LIMITS.MAX_VOICE_SEC_MESSAGE)}`;
+        $('#chatRecFill').style.width = Math.min(100, sec/LIMITS.MAX_VOICE_SEC_MESSAGE*100) + '%';
+      },
+      async result => {
+        $('#chatRecordingBar').style.display = 'none';
+        $('#chatInputBar').style.display = 'flex';
+        if(result) await sendChatVoice(result);
+      }
+    );
+  }catch(err){
+    $('#chatRecordingBar').style.display = 'none';
+    $('#chatInputBar').style.display = 'flex';
+    showToast(err.message || '无法访问麦克风');
+  }
+});
+$('#chatRecSend').addEventListener('click', async ()=>{
+  const result = await chatRecorder.stop();
+  $('#chatRecordingBar').style.display = 'none';
+  $('#chatInputBar').style.display = 'flex';
+  if(result) await sendChatVoice(result);
+});
+$('#chatRecCancel').addEventListener('click', async ()=>{
+  await chatRecorder.stop();
+  $('#chatRecordingBar').style.display = 'none';
+  $('#chatInputBar').style.display = 'flex';
+});
+async function sendChatVoice(result){
+  if(!currentChatUserId) return;
+  let url;
+  try{
+    url = await SyncAPI.uploadMedia(result.blob, {type:'voice'});
+    if(!url) throw new Error('empty-url');
+  }catch(e){ showToast('语音上传失败，请稍后重试'); return; }
+  const voicePayload = {url, duration: result.duration};
+  const sendResult = await SyncAPI.sendMessage(currentChatUserId, '', voicePayload);
+  if(!sendResult.ok){ showToast('发送失败，请稍后重试'); return; }
+  appendLocalChatMessage(null, voicePayload);
+}
+
 function refreshSyncStatusUI(){
   let status = '功能开发中';
   if(syncAvailable()) status = syncRegistered() ? `已登录：${SyncState.username}` : '未注册/未登录';
