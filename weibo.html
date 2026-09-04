@@ -1864,7 +1864,7 @@
       <div style="display:flex;justify-content:center;margin-bottom:6px;">
         <img id="registerAvatarPreview" class="avatar" style="width:72px;height:72px;">
       </div>
-      <div class="hint-text" style="text-align:center;margin:0 0 16px;">使用当前头像，如需更换请先在个人资料里改头像</div>
+      <div class="hint-text" style="text-align:center;margin:0 0 16px;">点击头像可拍照或从相册选择</div>
       <input type="text" id="registerUsername" placeholder="用户名（至少3个字符）" class="form-input">
       <input type="password" id="registerPassword" placeholder="密码（至少6位）" class="form-input">
       <input type="password" id="registerPassword2" placeholder="确认密码" class="form-input">
@@ -2306,17 +2306,24 @@ const SyncAPI = {
       const data = await res.json();
       return {ok:true, count:data.count||0};
     }catch(err){ return {ok:false, count:0}; }
-  },
-  async fetchPendingComments(){
+  },  async fetchPendingComments(){
     if(!syncRegistered()) return {ok:false, comments:[]};
     try{
       const res = await fetch(SyncState.endpoint.replace(/\/$/,'') + '/api/comments/pending', {
         headers:{'authorization':'Bearer '+SyncState.token}
       });
-      if(!res.ok) return {ok:false, comments:[]};
+      // 之前这里失败了只会返回 {ok:false}，具体是网络问题、鉴权问题还是后端 SQL 报错完全
+      // 无法区分，界面上永远只能显示一句笼统的"加载失败，请稍后重试"。先把后端返回的
+      // 错误原因（如果有）带回去，方便定位真正卡在哪一步。
+      if(!res.ok){
+        let reason = `HTTP ${res.status}`;
+        try{ const errData = await res.json(); if(errData && errData.error) reason = errData.error; }catch(e){}
+        console.error('fetchPendingComments failed:', reason);
+        return {ok:false, comments:[], reason};
+      }
       const data = await res.json();
       return {ok:true, comments:data.comments||[]};
-    }catch(err){ return {ok:false, comments:[]}; }
+    }catch(err){ console.error('fetchPendingComments error:', err); return {ok:false, comments:[], reason: err.message}; }
   },
   async moderateComment(commentId, action){
     if(!syncRegistered()) return {ok:false};
@@ -2325,8 +2332,13 @@ const SyncAPI = {
         method:'POST', headers:{'content-type':'application/json','authorization':'Bearer '+SyncState.token},
         body: JSON.stringify({action})
       });
-      return {ok:res.ok};
-    }catch(err){ return {ok:false}; }
+      if(!res.ok){
+        let reason = `HTTP ${res.status}`;
+        try{ const errData = await res.json(); if(errData && errData.error) reason = errData.error; }catch(e){}
+        return {ok:false, reason};
+      }
+      return {ok:true};
+    }catch(err){ return {ok:false, reason: err.message}; }
   }
 };
 
@@ -2493,7 +2505,7 @@ async function openModerationPanel(){
   }
   body.innerHTML = `<div class="hint-text">正在加载…</div>`;
   const result = await SyncAPI.fetchPendingComments();
-  if(!result.ok){ body.innerHTML = `<div class="hint-text">加载失败，请稍后重试</div>`; return; }
+  if(!result.ok){ body.innerHTML = `<div class="hint-text">加载失败，请稍后重试${result.reason ? '（'+escapeHTML(result.reason)+'）' : ''}</div>`; return; }
   if(!result.comments.length){ body.innerHTML = `<div class="hint-text">暂时没有待审核的评论</div>`; return; }
   body.innerHTML = result.comments.map(c=>`
     <div class="moderation-item" data-id="${c.id}">
@@ -2508,7 +2520,7 @@ async function openModerationPanel(){
     btn.addEventListener('click', async ()=>{
       const item = btn.closest('.moderation-item');
       const result = await SyncAPI.moderateComment(item.dataset.id, btn.dataset.action);
-      if(!result.ok){ showToast('操作失败，请稍后重试'); return; }
+      if(!result.ok){ showToast('操作失败，请稍后重试' + (result.reason ? '（'+result.reason+'）' : '')); return; }
       item.remove();
       showToast(btn.dataset.action==='approved' ? '已通过' : '已拒绝');
       refreshBellBadge();
@@ -3322,12 +3334,23 @@ async function loadFeed(reset){
   allPostsCache = posts;
   allCommentsCache = comments;
   if(reset){ renderedCount = 0; $('#feed').innerHTML=''; }
-  $('#countLine').textContent = currentTab==='all' ? `${posts.length}个作品` : '';
   renderMore();
 }
 function renderMore(){
   const feed = $('#feed');
   const source = filteredPosts();
+
+  // "N个作品"这行之前只在 loadFeed 里根据"全部本地帖子数"设置一次，切 tab 只会调用
+  // renderMore（不会重新走 loadFeed），countLine 从来不会跟着刷新——切到"收藏"/"广场"
+  // 时它还留着上一个 tab（通常是"本地"）算出来的旧数字，看起来就是错的；切到"已同步"/
+  // "未同步"时也是同一个问题，从来没显示过它们各自真实的数量。这里改成每次渲染都按
+  // 当前 tab 重新计算：收藏/广场没有意义，直接清空；本地/已同步/未同步用该 tab 筛选后
+  // （也叠加了搜索关键词过滤）的真实条数。
+  if(currentTab === 'favorites' || currentTab === 'square'){
+    $('#countLine').textContent = '';
+  } else {
+    $('#countLine').textContent = `${source.length}个作品`;
+  }
 
   if(currentTab === 'square'){
     renderSquare();
@@ -3592,7 +3615,18 @@ function squarePostMenuHTML(post){
 function squarePostHTML(post, options={}){
   const isLong = (post.text||'').length > 90;
   const avatarSrc = post.authorAvatar || placeholderAvatar();
-  const leftGroup = options.friendButtonHTML ? `<div class="post-actions-left">${options.friendButtonHTML}</div>` : `<div></div>`;
+  // 广场随手翻的帖子来自很多不同作者，以前这里的"加好友"按钮只有在"访问某个博主主页"
+  // 场景下才会传 options.friendButtonHTML 进来，广场列表本身从来没传过，所以广场帖子
+  // 左下角一直没有这个按钮。现在广场接口（/api/square）在登录状态下会给每条帖子带上
+  // post.authorIsFriend（true=已是好友 / 'pending'=已发出请求 / false=未加 / null=我自己的帖子），
+  // 没有显式传 friendButtonHTML 时就用它自动生成一个，自己的帖子不显示。
+  let friendButtonHTML = options.friendButtonHTML;
+  if(friendButtonHTML === undefined && post.authorIsFriend !== undefined && post.authorIsFriend !== null){
+    const isFriend = post.authorIsFriend === true;
+    const requested = post.authorIsFriend === 'pending';
+    friendButtonHTML = `<button class="act-btn square-friend-btn ${isFriend||requested?'is-friend':''}" data-uid="${post.userId}">${isFriend?'取消好友':(requested?'已请求':'加好友')}</button>`;
+  }
+  const leftGroup = friendButtonHTML ? `<div class="post-actions-left">${friendButtonHTML}</div>` : `<div></div>`;
   const dotHTML = post.authorOnline ? `<span class="online-dot"></span>` : '';
   return `
     <div class="post" data-square-id="${post.id}">
@@ -3680,6 +3714,29 @@ function bindSquarePostEvents(root){
       if(!result.ok){ showToast('收藏失败，请稍后重试'); return; }
       btn.classList.toggle('liked', result.favorited);
       btn.innerHTML = `${result.favorited?'★':'☆'} 收藏`;
+    });
+  });
+  $$('.square-friend-btn', root).forEach(btn=>{
+    if(btn.dataset.bound) return; btn.dataset.bound='1';
+    btn.addEventListener('click', async (e)=>{
+      e.stopPropagation();
+      const uid = btn.dataset.uid;
+      if(!syncRegistered()){
+        openRegisterModal('加好友需要先注册一个账号', async ()=>{
+          const result = await SyncAPI.requestFriend(uid);
+          if(result.ok){ btn.textContent = '已请求'; btn.classList.add('is-friend'); }
+        });
+        return;
+      }
+      if(btn.classList.contains('is-friend')){
+        showToast(btn.textContent==='取消好友' ? '取消好友功能还在开发中' : '好友请求已发送，等待对方确认');
+        return;
+      }
+      const result = await SyncAPI.requestFriend(uid);
+      if(!result.ok){ showToast('请求发送失败，请稍后重试'); return; }
+      btn.textContent = '已请求';
+      btn.classList.add('is-friend');
+      showToast('已发送好友请求，等待对方确认');
     });
   });
   $$('.media-grid[data-square-post]', root).forEach(grid=>{
@@ -3775,6 +3832,10 @@ async function toggleSquareCommentThread(postId, root){
     if(voice){
       try{
         const url = await SyncAPI.uploadMedia(voice.blob, {type:'voice'});
+        // uploadMedia 在未登录/未配置同步时会静默返回 null（不会抛错）——
+        // 如果这里不检查就直接把 voicePayload 传下去，会提交一条 voice.url 为空、
+        // text 也是空字符串的"完全空白"评论，界面上就是用户说的"评论是空的"。
+        if(!url) throw new Error('empty-url');
         voicePayload = {url, duration: voice.duration};
       }catch(e){ sendBtn.disabled = false; showToast('语音上传失败，请稍后重试'); return; }
     }
@@ -3797,6 +3858,17 @@ async function toggleSquareCommentThread(postId, root){
   const commentRecorder = createRecorder(LIMITS.MAX_VOICE_SEC_COMMENT);
   wrap.querySelector('.square-comment-bar .mic-icon').addEventListener('click', async ()=>{
     if(bar.classList.contains('recording')) return;
+    // 一定要在开始录音之前就检查是否已注册——如果录完了才发现没登录，
+    // 弹出注册框之后录音内容并不会保留（注册成功的回调只是重新加载评论区，
+    // 不会把刚才录的语音带进去），用户等于白录了一段，看起来就像"语音功能坏了"。
+    if(!syncRegistered()){
+      openRegisterModal('评论需要先注册一个账号', async ()=>{
+        wrap.dataset.loaded = '';
+        toggleSquareCommentThread(postId, root);
+        toggleSquareCommentThread(postId, root);
+      });
+      return;
+    }
     try{
       bar.classList.add('recording');
       wrap.querySelector('.square-comment-bar .rec-bar-fill').style.width = '0%';
@@ -4107,12 +4179,17 @@ async function setAvatar(file){
   try{
     const blob = file.size > LIMITS.MAX_IMAGE_BYTES ? await fileToImageBlob(file, LIMITS.MAX_IMAGE_BYTES, 500) : file;
     await idbPut('settings', {key:'avatar', value:blob});
-    $('#avatarImg').src = URL.createObjectURL(blob);
+    const objectUrl = URL.createObjectURL(blob);
+    $('#avatarImg').src = objectUrl;
+    // 注册弹窗开着的时候（在弹窗里拍照/选相册换头像），预览图也要跟着刷新，
+    // 不然选完之后弹窗里显示的还是旧头像。
+    if($('#registerOverlay').classList.contains('open')) $('#registerAvatarPreview').src = objectUrl;
     showToast('头像已更新');
     await loadFeed(true);
     syncProfileFieldIfRegistered(); // 已登录的话，头像也要跟着同步到云端数据库
   }catch(e){ showToast('头像更新失败'); }
 }
+$('#registerAvatarPreview').addEventListener('click', ()=>openSheet('#avatarSheetOverlay'));
 $('#avatarImg').addEventListener('click', (e)=>{
   e.stopPropagation();
   if(viewMode!=='owner' || viewingProfile) return;
