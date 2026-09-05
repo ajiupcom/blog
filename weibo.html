@@ -903,6 +903,26 @@
       padding: 0 4px;
     }
 
+    .pending-voice-chip {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--input-bg);
+      border-radius: 16px;
+      padding: 6px 10px;
+      margin: 0 8px 8px;
+      font-size: 12px;
+      color: var(--text-dim);
+    }
+    .pending-voice-chip .vn-icon { width: 14px; height: 14px; color: var(--accent); flex-shrink: 0; }
+    .pending-voice-chip .vn-icon svg { width: 14px; height: 14px; }
+    .pending-voice-chip .pending-voice-dur { font-weight: 600; color: var(--text); flex-shrink: 0; }
+    .pending-voice-chip .pending-voice-hint { flex: 1; color: var(--text-faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .pending-voice-chip .remove-pending-voice {
+      background: none; border: none; color: var(--text-faint); cursor: pointer;
+      font-size: 13px; line-height: 1; padding: 2px 4px; flex-shrink: 0;
+    }
+
     .emoji-panel {
       display: none;
       flex-wrap: wrap;
@@ -1352,7 +1372,11 @@
     .sidebar {
       position: fixed;
       top: 0;
-      left: 0;
+      /* .app 容器本身是 max-width:640px 居中的（margin:0 auto），在桌面宽屏浏览器里
+         左边会空出一大截。这个侧栏之前用 left:0 直接锚在整个视口的最左边，跟 .app
+         实际的左边缘对不上，看起来偏得很靠左。这里换成跟 .app 左边缘同样的计算方式：
+         视口够宽时贴着 .app 的左边缘，视口本身比 640px 还窄（比如手机）时退化成 0。 */
+      left: max(0px, calc(50vw - 328px));
       bottom: 0;
       width: 78%;
       max-width: 320px;
@@ -1469,6 +1493,8 @@
     .chat-msg-row { display: flex; align-items: flex-end; gap: 8px; max-width: 82%; }
     .chat-msg-row.mine { align-self: flex-end; flex-direction: row-reverse; }
     .chat-msg-row .avatar { width: 30px; height: 30px; flex-shrink: 0; }
+    .chat-bubble-stack { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+    .chat-msg-row.mine .chat-bubble-stack { align-items: flex-end; }
     .chat-bubble {
       background: var(--input-bg);
       color: var(--text);
@@ -1478,8 +1504,11 @@
       line-height: 1.5;
       word-break: break-word;
     }
-    .chat-msg-row.mine .chat-bubble { background: var(--accent); color: #fff; }
-    .chat-msg-row.mine .chat-bubble .voice-note { background: rgba(255,255,255,.18); }
+    .chat-msg-row.mine .chat-bubble {/* background: var(--accent); */ color: #fff; }
+    /* 语音消息之前套在"我方"的橙红色气泡里面，只在最外层叠了一层半透明白色，
+       看起来像一大坨红底；改成语音消息完全不用彩色气泡背景，直接就是跟帖子/
+       评论区语音留言一样的灰色小药丸，双方都统一用这个灰色样式，不再分"我方/对方"。 */
+    .chat-bubble.voice-bubble { background: transparent; padding: 0; }
     .chat-msg-time {
       font-size: 10.5px;
       color: var(--text-faint);
@@ -1488,13 +1517,32 @@
     }
     .chat-input-bar {
       display: flex;
-      align-items: center;
+      flex-direction: column;
       gap: 8px;
       padding: 10px 12px;
       border-top: 1px solid var(--border);
       flex-shrink: 0;
     }
-    .chat-input-bar input[type=text] {
+    .chat-input-icons {
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      padding: 0 2px;
+    }
+    .chat-input-icons .chat-icon-btn {
+      width: auto;
+      height: auto;
+      background: none;
+      color: var(--text-dim);
+      padding: 0;
+    }
+    .chat-input-icons .chat-icon-btn svg { width: 19px; height: 19px; }
+    .chat-input-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .chat-input-row input[type=text] {
       flex: 1;
       background: var(--input-bg);
       border: none;
@@ -2069,12 +2117,13 @@
 </div>
 
 <!-- ===== contacts sidebar ===== -->
-<div class="sidebar-overlay" id="sidebarOverlay"></div>
-<div class="sidebar" id="contactsSidebar">
-  <div class="sidebar-head">通讯录</div>
+<div class="sidebar-overlay" id="sidebarOverlay">
+  <div class="sidebar" id="contactsSidebar">
+    <div class="sidebar-head">通讯录</div>
 
-  <div class="sidebar-body" id="contactsBody">
-    <div class="empty-state" style="padding:30px 10px;">登录后可在这里查看好友并发起聊天</div>
+    <div class="sidebar-body" id="contactsBody">
+      <div class="empty-state" style="padding:30px 10px;">登录后可在这里查看好友并发起聊天</div>
+    </div>
   </div>
 </div>
 
@@ -2100,24 +2149,42 @@
     <span class="rec-label" id="chatRecLabel">录音中 0:00 / 1:00</span>
     <div class="rec-track"><div class="rec-fill" id="chatRecFill"></div></div>
     <button class="rec-cancel" id="chatRecCancel">取消</button>
-    <button class="rec-send" id="chatRecSend">发送</button>
+    <button class="rec-send" id="chatRecSend">停止</button>
+  </div>
+  <div class="pending-voice-chip" id="chatPendingVoice" style="display:none;">
+    <span class="vn-icon">
+      <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="6 3 20 12 6 21 6 3"/></svg>
+    </span>
+    <span class="pending-voice-dur" id="chatPendingVoiceDur">0:00</span>
+    <span class="pending-voice-hint">语音已录好，点发送一起提交</span>
+    <button class="remove-pending-voice" id="chatRemovePendingVoice">✕</button>
   </div>
   <div class="chat-input-bar" id="chatInputBar">
-    <button class="chat-icon-btn" id="chatMicIcon" title="语音">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/></svg>
-    </button>
-    <button class="chat-icon-btn" id="chatEmojiIcon" title="表情">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
-    </button>
-    <button class="chat-icon-btn" id="chatImgIcon" title="图片">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
-    </button>
-    <input type="text" id="chatInput" placeholder="发消息...">
-    <button class="chat-send-btn" id="chatSendBtn">
-      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M2 21l21-9L2 3v7l15 2-15 2z"/></svg>
-    </button>
+    <div class="chat-input-icons">
+      <button class="chat-icon-btn" id="chatMicIcon" title="语音">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/></svg>
+      </button>
+      <button class="chat-icon-btn" id="chatEmojiIcon" title="表情">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
+      </button>
+      <button class="chat-icon-btn" id="chatImgIcon" title="图片">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+      </button>
+      <button class="chat-icon-btn" id="chatFileIcon" title="发送文件">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a5 5 0 0 1-7.07-7.07l9.19-9.19a3.5 3.5 0 0 1 4.95 4.95l-9.19 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+      </button>
+      <input type="file" id="chatFileInput" style="display:none;">
+    </div>
+    <div class="chat-input-row">
+      <input type="text" id="chatInput" placeholder="发消息...">
+      <button class="chat-send-btn" id="chatSendBtn">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M2 21l21-9L2 3v7l15 2-15 2z"/></svg>
+      </button>
+    </div>
   </div>
 </div>
+
+
 
 <!-- ===== lightbox ===== -->
 <div class="lightbox" id="lightbox">
@@ -2245,6 +2312,15 @@ async function idbDelete(store, key){
   return new Promise((resolve,reject)=>{
     const tx = db.transaction(store,'readwrite');
     tx.objectStore(store).delete(key);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+async function idbClear(store){
+  const db = await openDB();
+  return new Promise((resolve,reject)=>{
+    const tx = db.transaction(store,'readwrite');
+    tx.objectStore(store).clear();
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
   });
@@ -2647,6 +2723,7 @@ async function afterAuthSuccess(){
   showToast('欢迎，' + SyncState.username);
   await loadFeed(true);
   if(currentTab === 'square' || currentTab === 'favorites') renderMore();
+  refreshFriendsCache(); // 登录成功，后台刷新一次本地好友缓存
   if(authSuccessCallback){ const cb = authSuccessCallback; authSuccessCallback = null; cb(); }
 }
 $('#registerSubmit').addEventListener('click', async ()=>{
@@ -3555,8 +3632,16 @@ function commentBarHTML(postId, extraClass){
       <div class="rec-bar-track"><div class="rec-bar-fill"></div>
         <div class="rec-bar-label"><span class="dot"></span><span class="rec-txt">录音中 0:00 / 0:30</span></div>
       </div>
-      <button class="rec-send-btn send-rec">发送</button>
+      <button class="rec-send-btn send-rec">停止</button>
       <button class="rec-cancel-btn cancel-rec">取消</button>
+    </div>
+    <div class="pending-voice-chip" style="display:none;">
+      <span class="vn-icon">
+        <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="6 3 20 12 6 21 6 3"/></svg>
+      </span>
+      <span class="pending-voice-dur">0:00</span>
+      <span class="pending-voice-hint">语音已录好，点发送一起提交</span>
+      <button class="remove-pending-voice">✕</button>
     </div>
     <div class="row2">
       <input type="text" placeholder="友善评论内容..." maxlength="500">
@@ -3572,7 +3657,7 @@ function postHTML(post, comments){
   const ownerButtonsLeft = viewMode==='owner' ? `
         <div class="post-actions-left">
           <button class="act-btn edit-post-btn">✎ 编辑</button>
-          <button class="act-btn sync-post-btn" data-id="${post.id}">${post.synced ? '↻ 更新' : '⇧ 同步'}</button>
+          <button class="act-btn sync-post-btn" data-id="${post.id}">${post.synced ? '↻ 更新' : '📤 同步'}</button>
         </div>` : '<div></div>';
   return `
     <div class="post" data-id="${post.id}">
@@ -3884,9 +3969,9 @@ function remoteMediaGridHTML(post){
   }).join('');
   return `<div class="media-grid ${gridClass(post.media.length)}" data-square-post="${post.id}">${items}</div>`;
 }
-function remoteVoiceHTML(voice){
+function remoteVoiceHTML(voice, compact){
   if(!voice) return '';
-  return `<div class="voice-note" data-audio="${voice.url}">
+  return `<div class="voice-note${compact?' voice-note-sm':''}" data-audio="${voice.url}">
     <span class="vn-icon">
       <svg class="icon-play" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 3 20 12 6 21 6 3"/></svg>
       <svg class="icon-pause" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
@@ -4128,6 +4213,22 @@ async function toggleSquareCommentThread(postId, root){
     wrap.style.display = 'none';
     toggleSquareCommentThread(postId, root); // 重新加载评论列表
   };
+  // 之前录音一结束（不管自动到时还是手动点当时的"发送"）就立刻把评论提交了，
+  // 文字和语音没法合成一条。现在改成录音只是"录好待发"，暂存在 pendingVoice 里，
+  // 用一个小灰条提示"语音已录好"；真正提交只在点输入框旁边的发送按钮时发生，
+  // 把文字和 pendingVoice 一起打包提交。
+  let pendingVoice = null;
+  const chip = wrap.querySelector('.square-comment-bar .pending-voice-chip');
+  const setPendingVoice = (result) => {
+    pendingVoice = result;
+    if(result){
+      wrap.querySelector('.square-comment-bar .pending-voice-dur').textContent = fmtDur(result.duration);
+      chip.style.display = 'flex';
+    } else {
+      chip.style.display = 'none';
+    }
+  };
+  wrap.querySelector('.square-comment-bar .remove-pending-voice').addEventListener('click', ()=>setPendingVoice(null));
   const submitAndRefresh = async (text, voice)=>{
     if(!syncRegistered()){
       openRegisterModal('评论需要先注册一个账号', async ()=>{
@@ -4153,6 +4254,7 @@ async function toggleSquareCommentThread(postId, root){
     sendBtn.disabled = false;
     if(!result.ok){ showToast('评论发送失败，请稍后重试'); return; }
     if(input) input.value = '';
+    setPendingVoice(null);
     showToast(result.status==='pending' ? '评论已提交，正在等待博主审核' : '评论已发布');
     // 评论按钮上的数字来自帖子列表接口一次性带回来的 commentCount，不会因为
     // 这里新发了一条评论自动变化；发布成功（且不是待审核）时顺手 +1，
@@ -4168,22 +4270,14 @@ async function toggleSquareCommentThread(postId, root){
   };
   const doSend = () => {
     const text = input.value.trim();
-    if(!text) return;
-    submitAndRefresh(text, null);
+    if(!text && !pendingVoice) return;
+    submitAndRefresh(text || null, pendingVoice);
     panel.classList.remove('open');
   };
   sendBtn.addEventListener('click', doSend);
   input.addEventListener('keydown', e=>{ if(e.key==='Enter') doSend(); });
 
   const commentRecorder = createRecorder(LIMITS.MAX_VOICE_SEC_COMMENT);
-  // 之前语音完成时永远传 text=null，导致输入框里已经打好的文字被无视，只能二选一发送。
-  // 现在录音一结束（无论自动到时还是手动点停止），都把输入框当时的文字一起带上合并发送。
-  const finishRecording = (result) => {
-    if(!result) return;
-    const text = input.value.trim();
-    input.value = '';
-    submitAndRefresh(text || null, result);
-  };
   wrap.querySelector('.square-comment-bar .mic-icon').addEventListener('click', async ()=>{
     if(bar.classList.contains('recording')) return;
     // 一定要在开始录音之前就检查是否已注册——如果录完了才发现没登录，
@@ -4205,7 +4299,7 @@ async function toggleSquareCommentThread(postId, root){
           wrap.querySelector('.square-comment-bar .rec-txt').textContent = `录音中 ${fmtDur(sec)} / 0:30`;
           wrap.querySelector('.square-comment-bar .rec-bar-fill').style.width = Math.min(100, sec/LIMITS.MAX_VOICE_SEC_COMMENT*100) + '%';
         },
-        async result => { bar.classList.remove('recording'); finishRecording(result); }
+        async result => { bar.classList.remove('recording'); setPendingVoice(result); } // 到时自动停止，转成待发状态
       );
     }catch(err){
       bar.classList.remove('recording');
@@ -4213,9 +4307,11 @@ async function toggleSquareCommentThread(postId, root){
     }
   });
   wrap.querySelector('.square-comment-bar .send-rec').addEventListener('click', async ()=>{
+    // 这个按钮之前叫"发送"、点了直接提交评论；现在叫"停止"，只结束录音、
+    // 把录好的片段放进待发区，不在这里提交。
     const result = await commentRecorder.stop();
     bar.classList.remove('recording');
-    finishRecording(result);
+    setPendingVoice(result);
   });
   wrap.querySelector('.square-comment-bar .cancel-rec').addEventListener('click', async ()=>{ await commentRecorder.stop(); bar.classList.remove('recording'); });
 }
@@ -4393,17 +4489,25 @@ function bindNewPostEvents(root){
     });
     $('.img-icon', bar).addEventListener('click', ()=>showToast('评论图片将在同步功能上线后开放'));
 
-    const commentRecorder = createRecorder(LIMITS.MAX_VOICE_SEC_COMMENT);
-    // 语音和文字之前是互斥的：无论是自动到时还是手动点发送结束录音，都只会带 voice、
-    // 不带 input 里已经打好的文字，导致"想连文字一起发"发不出去，只能二选一发两条。
-    // 现在录音一结束（不管是到时自动结束还是手动结束），都顺手把输入框里当时的文字
-    // 一起带上，合并成一条评论，然后再清空输入框。
-    const finishRecording = (result) => {
-      if(!result) return;
-      const text = input.value.trim();
-      input.value = '';
-      submitComment(bar, text || null, result);
+    // 之前录音一结束（不管到时自动结束还是手动点"发送"）就立刻把评论发出去，
+    // 文字和语音谁先谁后完全不影响谁被发送——但两个没法合成一条：录完音那一刻
+    // 就已经把评论发出去了，这之后再打字也没用了。现在改成录音只是"录好待发"，
+    // 存在 pendingVoice 里，用一个小灰条提示"语音已录好"；真正发送只在点主输入框
+    // 右边那个发送按钮时发生，把当时输入框里的文字和 pendingVoice 一起打包发出去。
+    let pendingVoice = null;
+    const chip = $('.pending-voice-chip', bar);
+    const setPendingVoice = (result) => {
+      pendingVoice = result;
+      if(result){
+        $('.pending-voice-dur', chip).textContent = fmtDur(result.duration);
+        chip.style.display = 'flex';
+      } else {
+        chip.style.display = 'none';
+      }
     };
+    $('.remove-pending-voice', chip).addEventListener('click', ()=>setPendingVoice(null));
+
+    const commentRecorder = createRecorder(LIMITS.MAX_VOICE_SEC_COMMENT);
     $('.mic-icon', bar).addEventListener('click', async ()=>{
       if(bar.classList.contains('recording')) return; // 录音期间该图标已隐藏，不会触发到这里
       try{
@@ -4414,7 +4518,7 @@ function bindNewPostEvents(root){
             $('.rec-txt', bar).textContent = `录音中 ${fmtDur(sec)} / 0:30`;
             $('.rec-bar-fill', bar).style.width = Math.min(100, sec/LIMITS.MAX_VOICE_SEC_COMMENT*100) + '%';
           },
-          async result => { bar.classList.remove('recording'); finishRecording(result); } // 到时自动停止发送
+          async result => { bar.classList.remove('recording'); setPendingVoice(result); } // 到时自动停止，转成待发状态
         );
       }catch(err){
         bar.classList.remove('recording');
@@ -4422,18 +4526,21 @@ function bindNewPostEvents(root){
       }
     });
     $('.send-rec', bar).addEventListener('click', async ()=>{
+      // 这个按钮之前叫"发送"、点了直接把评论发出去；现在叫"停止"，只是结束录音、
+      // 把录好的片段放进待发区，不在这里发送。
       const result = await commentRecorder.stop();
       bar.classList.remove('recording');
-      finishRecording(result);
+      setPendingVoice(result);
     });
     $('.cancel-rec', bar).addEventListener('click', async ()=>{ await commentRecorder.stop(); bar.classList.remove('recording'); });
     const sendBtn = $('.send-btn', bar);
     const input = $('input[type=text]', bar);
     const doSend = () => {
       const val = input.value.trim();
-      if(!val) return;
-      submitComment(bar, val, null);
+      if(!val && !pendingVoice) return;
+      submitComment(bar, val || null, pendingVoice);
       input.value = '';
+      setPendingVoice(null);
       panel.classList.remove('open');
     };
     sendBtn.addEventListener('click', doSend);
@@ -4629,6 +4736,16 @@ $('#sidebarOverlay').addEventListener('click', ()=>{
 });
 
 /* ---- 通讯录：好友列表 + 在线状态 + 未读消息数 ---- */
+// 好友列表存本地（IndexedDB 的 friends store），只在登录成功、或者刷新页面时
+// 从云端拉一次并覆盖本地缓存；平时点通讯录按钮直接读本地缓存，不重新请求云端——
+// 未读消息数是实时变化的，这个还是每次打开都现查。
+async function refreshFriendsCache(){
+  if(!syncRegistered()) return;
+  const result = await SyncAPI.fetchFriends();
+  if(!result.ok) return; // 拉取失败就保留本地已有的缓存，不清空
+  await idbClear('friends');
+  for(const f of result.friends) await idbPut('friends', f);
+}
 async function renderContactsList(){
   const body = $('#contactsBody');
   if(!syncRegistered()){
@@ -4636,12 +4753,10 @@ async function renderContactsList(){
     return;
   }
   body.innerHTML = `<div class="hint-text" style="padding:20px 18px;">正在加载…</div>`;
-  const [friendsResult, unreadResult] = await Promise.all([
-    SyncAPI.fetchFriends(),
+  const [friends, unreadResult] = await Promise.all([
+    idbGetAll('friends'),
     SyncAPI.fetchUnreadBySender()
   ]);
-  if(!friendsResult.ok){ body.innerHTML = `<div class="hint-text" style="padding:20px 18px;">加载失败，请稍后重试</div>`; return; }
-  const friends = friendsResult.friends;
   if(!friends.length){ body.innerHTML = `<div class="empty-state" style="padding:30px 10px;">还没有好友，去广场加几个吧</div>`; return; }
   const unreadBySender = unreadResult.ok ? unreadResult.unreadBySender : {};
   const ONLINE_WINDOW_MS = 60*1000;
@@ -4699,10 +4814,17 @@ function bindChatVoiceNotes(root){
     });
   });
 }
-function chatBubbleRowHTML(mine, avatarSrc, contentHTML, timeIso){
+function chatBubbleRowHTML(mine, avatarSrc, message, timeIso){
+  // 之前一条消息只能要么是文字要么是语音，只传一段拼好的 contentHTML。
+  // 现在一条消息可能同时有文字+语音（见下面发送逻辑的改动），这里改成分别接收
+  // text/voice，各自渲染成独立的小气泡再纵向堆叠——语音气泡永远是灰色药丸样式
+  // （voice-bubble class 去掉了彩色背景），不会跟着"我方"的橙红色文字气泡混在一起。
+  const parts = [];
+  if(message.text) parts.push(`<div class="chat-bubble">${escapeHTML(message.text)}</div>`);
+  if(message.voiceUrl) parts.push(`<div class="chat-bubble voice-bubble">${remoteVoiceHTML({url:message.voiceUrl, duration:message.voiceDuration}, true)}</div>`);
   return `<div class="chat-msg-row ${mine?'mine':''}">
     <img class="avatar" src="${avatarSrc}">
-    <div class="chat-bubble">${contentHTML}</div>
+    <div class="chat-bubble-stack">${parts.join('')}</div>
     <span class="chat-msg-time">${fmtChatClock(timeIso)}</span>
   </div>`;
 }
@@ -4724,8 +4846,7 @@ async function openChatWith(friend){
     const dateLabel = fmtChatDate(m.created_at);
     if(dateLabel !== lastDate){ html += `<div class="chat-date-divider">${dateLabel}</div>`; lastDate = dateLabel; }
     const mine = Number(m.from_user_id) === Number(SyncState.userId);
-    const contentHTML = m.voice_url ? remoteVoiceHTML({url:m.voice_url, duration:m.voice_duration}) : escapeHTML(m.text||'');
-    html += chatBubbleRowHTML(mine, mine?myAvatarUrl:($('#chatAvatar').src), contentHTML, m.created_at);
+    html += chatBubbleRowHTML(mine, mine?myAvatarUrl:($('#chatAvatar').src), {text:m.text, voiceUrl:m.voice_url, voiceDuration:m.voice_duration}, m.created_at);
   }
   body.innerHTML = html || `<div class="hint-text" style="text-align:center;padding:20px;">还没有消息，打个招呼吧</div>`;
   bindChatVoiceNotes(body);
@@ -4745,8 +4866,7 @@ function appendLocalChatMessage(text, voice){
   if(!lastDivider || lastDivider.textContent !== dateLabel){
     body.insertAdjacentHTML('beforeend', `<div class="chat-date-divider">${dateLabel}</div>`);
   }
-  const contentHTML = voice ? remoteVoiceHTML({url:voice.url, duration:voice.duration}) : escapeHTML(text||'');
-  body.insertAdjacentHTML('beforeend', chatBubbleRowHTML(true, myAvatarUrl, contentHTML, now));
+  body.insertAdjacentHTML('beforeend', chatBubbleRowHTML(true, myAvatarUrl, {text, voiceUrl: voice&&voice.url, voiceDuration: voice&&voice.duration}, now));
   bindChatVoiceNotes(body);
   body.scrollTop = body.scrollHeight;
 }
@@ -4754,14 +4874,39 @@ $('#chatBackBtn').addEventListener('click', ()=>{
   $('#chatOverlay').classList.remove('open');
   currentChatUserId = null;
 });
+// 之前录音一结束就立刻单独发一条语音消息，文字和语音没法合并成一条。现在改成
+// 录音只是"录好待发"，暂存在 chatPendingVoice 里，用小灰条提示；点主发送按钮时
+// 才把输入框文字和待发语音一起打包发送（语音这时候才真正上传）。
+let chatPendingVoice = null;
+const chatPendingChip = $('#chatPendingVoice');
+function setChatPendingVoice(result){
+  chatPendingVoice = result;
+  if(result){
+    $('#chatPendingVoiceDur').textContent = fmtDur(result.duration);
+    chatPendingChip.style.display = 'flex';
+  } else {
+    chatPendingChip.style.display = 'none';
+  }
+}
+$('#chatRemovePendingVoice').addEventListener('click', ()=>setChatPendingVoice(null));
 async function doSendChatMessage(){
   const input = $('#chatInput');
   const text = input.value.trim();
-  if(!text || !currentChatUserId) return;
+  if(!currentChatUserId || (!text && !chatPendingVoice)) return;
+  const voice = chatPendingVoice;
   input.value = '';
-  const result = await SyncAPI.sendMessage(currentChatUserId, text);
-  if(!result.ok){ showToast('发送失败，请稍后重试'); input.value = text; return; }
-  appendLocalChatMessage(text, null);
+  setChatPendingVoice(null);
+  let voicePayload = null;
+  if(voice){
+    try{
+      const url = await SyncAPI.uploadMedia(voice.blob, {type:'voice'});
+      if(!url) throw new Error('empty-url');
+      voicePayload = {url, duration: voice.duration};
+    }catch(e){ showToast('语音上传失败，请稍后重试'); return; }
+  }
+  const result = await SyncAPI.sendMessage(currentChatUserId, text, voicePayload);
+  if(!result.ok){ showToast('发送失败，请稍后重试'); return; }
+  appendLocalChatMessage(text, voicePayload);
 }
 $('#chatSendBtn').addEventListener('click', doSendChatMessage);
 $('#chatInput').addEventListener('keydown', e=>{ if(e.key==='Enter') doSendChatMessage(); });
@@ -4773,6 +4918,7 @@ $$('span', chatEmojiPanel).forEach(span=>{
   span.addEventListener('click', ()=>{ $('#chatInput').value += span.textContent; $('#chatInput').focus(); });
 });
 $('#chatImgIcon').addEventListener('click', ()=>showToast('聊天图片将在同步功能上线后开放'));
+$('#chatFileIcon').addEventListener('click', ()=>showToast('发送文件功能开发中，敬请期待'));
 // 语音/视频通话不在这轮范围内（项目早前已明确把实时通话功能延后），点击先给出明确提示，
 // 不假装能打通，也不伪造一条"已取消"的消息骗自己。
 $('#chatCallBtn').addEventListener('click', ()=>showToast('语音通话功能开发中，敬请期待'));
@@ -4793,7 +4939,7 @@ $('#chatMicIcon').addEventListener('click', async ()=>{
       async result => {
         $('#chatRecordingBar').style.display = 'none';
         $('#chatInputBar').style.display = 'flex';
-        if(result) await sendChatVoice(result);
+        setChatPendingVoice(result); // 到时自动停止，转成待发状态，不直接发送
       }
     );
   }catch(err){
@@ -4803,28 +4949,18 @@ $('#chatMicIcon').addEventListener('click', async ()=>{
   }
 });
 $('#chatRecSend').addEventListener('click', async ()=>{
+  // 这个按钮之前叫"发送"，点了直接单独发一条语音；现在叫"停止"，只结束录音、
+  // 转成待发状态，不在这里发送。
   const result = await chatRecorder.stop();
   $('#chatRecordingBar').style.display = 'none';
   $('#chatInputBar').style.display = 'flex';
-  if(result) await sendChatVoice(result);
+  setChatPendingVoice(result);
 });
 $('#chatRecCancel').addEventListener('click', async ()=>{
   await chatRecorder.stop();
   $('#chatRecordingBar').style.display = 'none';
   $('#chatInputBar').style.display = 'flex';
 });
-async function sendChatVoice(result){
-  if(!currentChatUserId) return;
-  let url;
-  try{
-    url = await SyncAPI.uploadMedia(result.blob, {type:'voice'});
-    if(!url) throw new Error('empty-url');
-  }catch(e){ showToast('语音上传失败，请稍后重试'); return; }
-  const voicePayload = {url, duration: result.duration};
-  const sendResult = await SyncAPI.sendMessage(currentChatUserId, '', voicePayload);
-  if(!sendResult.ok){ showToast('发送失败，请稍后重试'); return; }
-  appendLocalChatMessage(null, voicePayload);
-}
 
 function refreshSyncStatusUI(){
   let status = '功能开发中';
@@ -4855,6 +4991,8 @@ $('#syncLogoutBtn').addEventListener('click', async ()=>{
   await idbPut('settings', {key:'syncUserId', value:null});
   await idbPut('settings', {key:'syncUsername', value:null});
   await idbPut('settings', {key:'syncRegistered', value:false});
+  await idbClear('friends'); // 退出登录了，本地缓存的好友列表（属于上一个账号）也要清掉，
+                             // 不然下次换个账号登录，通讯录会先闪一下上一个人的好友列表
   SyncState.token = null; SyncState.userId = null; SyncState.username = null; SyncState.registered = false;
   updatePageTitle();
   refreshSyncStatusUI();
@@ -4871,9 +5009,26 @@ async function init(){
   await loadProfile();
   applyViewMode();
   setupInfiniteScroll();
+  refreshFriendsCache(); // 刷新页面时后台刷新一次本地好友缓存（不阻塞其它初始化）
   const issue = micAvailabilityIssue();
   if(issue) showToast(issue, 4000);
 }
+// 之前只有部分弹窗（图片/视频/头像/背景来源选择、通讯录侧栏）支持点浮层背景关闭，
+// 其余弹窗（发帖、设置、文字编辑、审核通知、注册、登录）必须点各自的"取消/关闭"
+// 按钮才能关掉。这里统一给所有 .modal-overlay 类型的弹窗补上"点背景关闭"——
+// 判断用 e.target===el，只有直接点在半透明背景上才关，点弹窗内容本身不会误关。
+// 聊天窗口和拍照界面是全屏页面、没有"浮层外"的概念，不在这个处理范围内。
+[
+  ['#composeOverlay', closeComposer],
+  ['#settingsOverlay', ()=>$('#settingsOverlay').classList.remove('open')],
+  ['#textEditOverlay', ()=>$('#textEditOverlay').classList.remove('open')],
+  ['#moderationOverlay', ()=>$('#moderationOverlay').classList.remove('open')],
+  ['#registerOverlay', ()=>$('#registerOverlay').classList.remove('open')],
+  ['#loginOverlay', ()=>$('#loginOverlay').classList.remove('open')],
+].forEach(([sel, closeFn])=>{
+  const el = $(sel);
+  el.addEventListener('click', e=>{ if(e.target === el) closeFn(); });
+});
 init();
 </script>
 </body>
