@@ -3657,7 +3657,7 @@ function postHTML(post, comments){
   const ownerButtonsLeft = viewMode==='owner' ? `
         <div class="post-actions-left">
           <button class="act-btn edit-post-btn">✎ 编辑</button>
-          <button class="act-btn sync-post-btn" data-id="${post.id}">${post.synced ? '↻ 更新' : '📤 同步'}</button>
+          <button class="act-btn sync-post-btn" data-id="${post.id}">${post.synced ? '↻ 更新' : '⇄ 同步'}</button>
         </div>` : '<div></div>';
   return `
     <div class="post" data-id="${post.id}">
