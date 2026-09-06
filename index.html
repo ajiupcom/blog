@@ -2470,8 +2470,13 @@ const SyncAPI = {
       const res = await fetch(SyncState.endpoint.replace(/\/$/,'') + `/api/posts/${postId}`, {
         method:'DELETE', headers:{'authorization':'Bearer '+SyncState.token}
       });
-      return {ok:res.ok};
-    }catch(err){ return {ok:false}; }
+      if(!res.ok){
+        let reason = `HTTP ${res.status}`;
+        try{ const errData = await res.json(); if(errData && errData.error) reason = errData.error; }catch(e){}
+        return {ok:false, reason};
+      }
+      return {ok:true};
+    }catch(err){ return {ok:false, reason: err.message}; }
   },
   // 广场：拉取所有用户设为"公共"的帖子，随机顺序（浏览不需要登录/注册）
   async fetchSquare(limit=20){
@@ -3657,7 +3662,7 @@ function postHTML(post, comments){
   const ownerButtonsLeft = viewMode==='owner' ? `
         <div class="post-actions-left">
           <button class="act-btn edit-post-btn">✎ 编辑</button>
-          <button class="act-btn sync-post-btn" data-id="${post.id}">${post.synced ? '↻ 更新' : '⇄ 同步'}</button>
+          <button class="act-btn sync-post-btn" data-id="${post.id}">${post.synced ? '↻ 更新' : '⇧ 同步'}</button>
         </div>` : '<div></div>';
   return `
     <div class="post" data-id="${post.id}">
@@ -3891,7 +3896,7 @@ async function renderBloggerPosts(){
 let squarePostsCache = [];
 let squareLoading = false;
 let squareRenderedCount = 0;
-const SQUARE_PAGE_SIZE = 10;
+const SQUARE_PAGE_SIZE = 5; // 跟本地 feed 的 PAGE_SIZE 保持一致：首次显示5个，下滑到底再加载5个
 async function renderSquare(){
   const feed = $('#feed');
   $('#loadSentinel').textContent = '';
@@ -4015,7 +4020,7 @@ function squarePostHTML(post, options={}){
         <button class="post-menu-btn">⋯</button>
         <div class="post-menu-dropdown">${squarePostMenuHTML(post)}</div>
       </div>
-      ${post.text ? `<div class="post-body">${escapeHTML(post.text).slice(0, isLong?88:undefined)}${isLong?'…':''}</div>` : ''}
+      ${post.text ? `<div class="post-body">${escapeHTML(post.text).slice(0, isLong?88:undefined)}${isLong?`… <span class="expand-link" data-full="${encodeURIComponent(post.text)}">全文</span>`:''}</div>` : ''}
       ${remoteMediaGridHTML(post)}
       ${remoteVoiceHTML(post.voice)}
       <div class="post-meta">
@@ -4045,6 +4050,7 @@ function squareCommentsPreviewHTML(post){
   return `<div class="comments-list">${rows}</div>${more}`;
 }
 function bindSquarePostEvents(root){
+  bindExpandLinks(root); // 广场帖子长文之前根本没有"全文"/"收起"，直接复用本地帖子已经用的这套逻辑
   $$('.blogger-open-trigger', root).forEach(el=>{
     if(el.dataset.bound) return; el.dataset.bound='1';
     el.addEventListener('click', ()=>openBloggerProfile(el.dataset.uid));
@@ -4071,7 +4077,7 @@ function bindSquarePostEvents(root){
     el.addEventListener('click', async ()=>{
       if(!confirm('删除这条云端帖子？删除后不可恢复')) return;
       const result = await SyncAPI.deletePost(el.dataset.id);
-      if(!result.ok){ showToast('删除失败，请稍后重试'); return; }
+      if(!result.ok){ showToast('删除失败，请稍后重试' + (result.reason?'（'+result.reason+'）':'')); return; }
       // 如果本地也有这条帖子（是我自己发布并同步的），把本地的同步状态也重置
       const localPost = await idbGet('posts', el.dataset.id);
       if(localPost){ localPost.synced = false; await idbPut('posts', localPost); }
@@ -4429,9 +4435,16 @@ function bindNewPostEvents(root){
       const postId = el.closest('.post').dataset.id;
       const post = await idbGet('posts', postId);
       await idbDelete('posts', postId);
-      showToast('已删除');
       await loadFeed(true);
-      if(post && post.synced) SyncAPI.deletePost(postId); // 已同步过的帖子，后台一并清理云端的文件和记录
+      // 之前这里是 fire-and-forget（不 await、不看结果），云端那份如果删除失败，
+      // 本地照样提示"已删除"，用户会误以为跨设备也已经删干净了。现在等结果，
+      // 云端确实失败的话额外提示一下，而不是把这类失败悄悄吞掉。
+      if(post && post.synced){
+        const result = await SyncAPI.deletePost(postId);
+        showToast(result.ok ? '已删除' : `本地已删除，但云端同步删除失败${result.reason?'（'+result.reason+'）':''}`);
+      } else {
+        showToast('已删除');
+      }
     });
   });
   $$('.report-post', root).forEach(el=>{
