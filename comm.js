@@ -4,7 +4,7 @@
          支持 offMessage 注销回调；连接状态查询。
    通过 <script src="comm.js"> 加载，全局暴露 BubbleComm。 */
 const BubbleComm = (() => {
-  let SIGNAL_ENDPOINT = 'wss://ws.xxooe.com/signal';
+  let SIGNAL_ENDPOINT = 'wss://ws.ajiup.com/signal';
   const TRANSPORT_MODE = { current: 'websocket' }; // 'loopback' | 'websocket'
   const MAX_RECONNECT_DELAY = 30000;
 

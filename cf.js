@@ -3,7 +3,7 @@
    优化：请求超时控制、headers 深合并、TURN 错误区分、API_BASE 可配置。
    通过 plain <script src="cf.js"> 加载，向全局暴露 window.BubbleCF。 */
 const BubbleCF = (() => {
-  let API_BASE = 'https://ws.xxooe.com';
+  let API_BASE = 'https://ws.ajiup.com';
   const DEFAULT_TIMEOUT = 15000;
 
   /** 切换 API 基地址（开发环境可用），返回旧地址。 */
