@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
@@ -943,13 +944,41 @@
     .call-btn.accept { background: #3fbf6f; }
     .call-btn.active { background: #fff; color: #14141a; }
     .call-video-layer { position: absolute; inset: 0; background: #000; }
-    .call-video-layer video { width: 100%; height: 100%; object-fit: cover; }
-    .call-video-layer video.local-preview {
-      position: absolute; width: 100px; height: 140px; top: 20px; right: 16px;
+    .call-video-layer video { position: absolute; }
+    .call-video-big { inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 1; }
+    .call-video-pip {
+      width: 100px; height: 140px; top: 20px; right: 16px;
       border-radius: 10px; object-fit: cover; box-shadow: 0 2px 10px rgba(0,0,0,.5);
-      z-index: 2;
+      z-index: 2; cursor: pointer;
     }
+    /* 自拍永远是镜像的（不管它当前是大画面还是小窗口），符合直觉——自己
+       举着手机看自己时本来就是照镜子的效果，对方看到的画面不受这个影响
+       （WebRTC只镜像本地渲染，不影响实际发送出去的视频帧）。 */
+    #callLocalVideo { transform: scaleX(-1); }
     .call-controls-hidden { opacity: 0; pointer-events: none; transition: opacity .2s; }
+
+    /* ===== 新消息顶部浮层 ===== */
+    .msg-banner {
+      position: fixed;
+      left: max(0px, calc(50vw - 320px));
+      width: min(640px, 100vw);
+      top: -100px;
+      z-index: 400;
+      display: flex; align-items: center; gap: 10px;
+      margin: 10px auto 0;
+      padding: 10px 14px;
+      box-sizing: border-box;
+      background: var(--card);
+      border-radius: 14px;
+      box-shadow: 0 8px 28px rgba(0,0,0,.22);
+      cursor: pointer;
+      transition: top .25s ease;
+    }
+    .msg-banner.show { top: 10px; }
+    .msg-banner img.avatar { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
+    .msg-banner .msg-banner-body { flex: 1; min-width: 0; }
+    .msg-banner .msg-banner-name { font-size: 14px; font-weight: 700; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .msg-banner .msg-banner-text { font-size: 13px; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
 
     .emoji-panel {
       display: none;
@@ -1452,6 +1481,9 @@
       text-overflow: ellipsis;
     }
     .contact-unread {
+      position: absolute;
+      top: -3px;
+      right: -3px;
       min-width: 18px;
       height: 18px;
       border-radius: 9px;
@@ -1464,12 +1496,19 @@
       justify-content: center;
       padding: 0 5px;
       flex-shrink: 0;
+      box-shadow: 0 0 0 2px var(--card);
     }
 
     /* ---------- 聊天窗口 ---------- */
     .chat-overlay {
       position: fixed;
-      inset: 0;
+      top: 0;
+      bottom: 0;
+      /* 跟 .sidebar 是同一个问题：.app 本身是 max-width:640px 居中的，这里原来用
+         inset:0 直接顶满整个视口，桌面宽屏下比 .app 本体宽得多，看起来完全不像
+         同一个应用的一部分。换成跟 .app 同样的左边缘计算方式+同样的宽度上限。 */
+      left: max(0px, calc(50vw - 320px));
+      width: min(640px, 100vw);
       background: var(--card);
       z-index: 200;
       display: none;
@@ -2211,9 +2250,17 @@
   </div>
 </div>
 
+
+
 <!-- ===== call overlay (语音/视频通话) — 内容完全由JS按 BubbleCall 的
      状态快照渲染（见下方脚本区 renderCallOverlay），这里只留一个挂载点 -->
 <div class="call-overlay" id="callOverlay" style="display:none;"></div>
+
+<!-- ===== 新消息顶部浮层——对方不在当前聊天窗口时收到消息才弹，点击直接
+     跳转到那个人的聊天窗口，跟通话浮层一样内容完全由JS渲染 ===== -->
+<div class="msg-banner" id="msgBanner" style="display:none;"></div>
+
+
 
 <!-- ===== lightbox ===== -->
 <div class="lightbox" id="lightbox">
@@ -2426,8 +2473,15 @@ async function rollbackUploadedMedia(urls){
   }
 }
 async function pushLocalProfile(){
-  const [avatarRow, coverRow] = await Promise.all([idbGet('settings','avatar'), idbGet('settings','cover')]);
-  const body = { nickname: $('#displayName').textContent, bio: $('#bioText').textContent };
+  const [avatarRow, coverRow, nicknameRow, bioRow] = await Promise.all([
+    idbGet('settings','avatar'), idbGet('settings','cover'), idbGet('settings','nickname'), idbGet('settings','bio')
+  ]);
+  // 注意：不能用 $('#displayName').textContent / $('#bioText').textContent——
+  // 跟头像/背景是同一个坑（见上面 openRegisterModal 里的说明）：如果用户正在
+  // 看别人的主页（viewingProfile），header 会被换成对方的昵称/签名，这里
+  // 读到的就会是博主的昵称，把它当成"我的"资料同步到云端——之前头像这里
+  // 已经修过一次，昵称/签名这两个字段当时漏掉了，同一个bug两个位置。
+  const body = { nickname: nicknameRow ? nicknameRow.value : SyncState.username, bio: bioRow ? bioRow.value : '' };
   // 只有本地真的有头像/背景时才带上这两个字段——不然会把云端已经存在的头像/背景覆盖成 null
   // 头像和背景各自单独 try/catch：以前两者共用一次 await，只要有一个上传失败
   // 整个函数就会直接抛出，连昵称/签名、以及另一张图都不会同步——用户改了头像，
@@ -2907,8 +2961,36 @@ async function handleIncomingChatMessage(message){
     SyncAPI.markRead([message.id]).catch(() => {});
   } else {
     refreshContactUnreadBadge(fromId);
+    const f = await idbGet('friends', fromId);
+    showIncomingMsgBanner(fromId, f && f.avatar_url, (f && (f.remark || f.nickname)) || '新消息', message.voice_url ? '[语音]' : message.text);
   }
 }
+/** 新消息顶部浮层——跟泡泡IM同一套逻辑：对方不在当前打开的聊天窗口时才
+    弹，3.5秒后自动收起；点一下直接跳转进对应的聊天窗口，同时收起浮层。
+    正在看着这个人的聊天窗口时消息已经实时展示在聊天记录里了，再弹一次
+    反而是打扰，所以调用方（handleIncomingChatMessage/handleP2PChatDecrypted）
+    只在"不是当前聊天对象"这个分支里才调用。 */
+let msgBannerTimer = null;
+function showIncomingMsgBanner(fromId, avatarUrl, name, previewText){
+  const el = $('#msgBanner');
+  el.innerHTML = `<img class="avatar" src="${avatarUrl || placeholderAvatar()}">
+    <div class="msg-banner-body">
+      <div class="msg-banner-name">${escapeHTML(name || '新消息')}</div>
+      <div class="msg-banner-text">${escapeHTML(previewText || '')}</div>
+    </div>`;
+  el.style.display = 'flex';
+  requestAnimationFrame(() => el.classList.add('show'));
+  el.onclick = () => {
+    hideMsgBanner();
+    $('#contactsSidebar').classList.remove('open');
+    $('#sidebarOverlay').classList.remove('open');
+    const online = (Presence && Presence.isOnline) ? Presence.isOnline(String(fromId)) : false;
+    openChatWith({ id: fromId, nickname: name, avatarUrl, online });
+  };
+  clearTimeout(msgBannerTimer);
+  msgBannerTimer = setTimeout(hideMsgBanner, 3500);
+}
+function hideMsgBanner(){ $('#msgBanner').classList.remove('show'); }
 /** 通讯录角标——只在通讯录当前就开着（这一行存在于DOM里）才现查一次
     未读数；没开着就不用管，下次打开通讯录本来就会重新整体拉一次。 */
 async function refreshContactUnreadBadge(fromId){
@@ -2917,10 +2999,11 @@ async function refreshContactUnreadBadge(fromId){
   const result = await SyncAPI.fetchUnreadBySender();
   if(!result.ok) return;
   const n = result.unreadBySender[fromId] || 0;
-  let badge = $('.contact-unread', row);
+  const wrap = $('.avatar-wrap', row);
+  let badge = wrap && $('.contact-unread', wrap);
   if(n > 0){
-    if(!badge){ badge = document.createElement('span'); badge.className = 'contact-unread'; row.appendChild(badge); }
-    badge.textContent = n > 99 ? '99+' : n;
+    if(!badge && wrap){ badge = document.createElement('span'); badge.className = 'contact-unread'; wrap.appendChild(badge); }
+    if(badge) badge.textContent = n > 99 ? '99+' : n;
   } else if(badge){ badge.remove(); }
 }
 function updateContactOnlineDot(uid, online){
@@ -2953,7 +3036,12 @@ async function handleP2PChatDecrypted(peerUid, obj){
   await BubbleDB.upsertConvo({ id: String(fromId), type: 'single' });
   const msg = { msgId: 'p_' + Date.now() + '_' + Math.random().toString(36).slice(2), convId: String(fromId), from: String(fromId), type: obj.type, content: obj.content, createdAt: Date.now(), delivered: true };
   await BubbleDB.addMessage(msg);
-  if(currentChatUserId && Number(currentChatUserId) === fromId) appendChatRow(false, msg);
+  if(currentChatUserId && Number(currentChatUserId) === fromId){
+    appendChatRow(false, msg);
+  } else {
+    const f = await idbGet('friends', fromId);
+    showIncomingMsgBanner(fromId, f && f.avatar_url, (f && (f.remark || f.nickname)) || '新消息', obj.type === 'image' ? '[图片]' : '[文件]');
+  }
 }
 async function sendChatMedia(file, kind){
   if(!currentChatUserId) return;
@@ -2975,13 +3063,73 @@ async function sendChatMedia(file, kind){
 
 /* ---- 语音/视频通话（bubble-call.js 驱动） ---- */
 let callRenderState = { peerUid: null, status: null, video: null, localStream: null, remoteStream: null };
+/* ---- 通话提示音：来电/呼出/接通/结束，纯WebAudio振荡器合成的哔声，不需要
+   外部音频文件——bubble-call.js 本身不管UI/声音，这些都是调用方（这里）自己接的。 */
+let callAudioCtx = null;
+function ensureCallAudioCtx(){
+  if(!callAudioCtx) callAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  // 浏览器自动播放策略：页面在还没有任何用户手势（点击/按键）之前，
+  // AudioContext 可能创建出来就是'suspended'状态，声音发不出来。来电铃声
+  // 不一定跟在某次点击后面（对方主动呼叫过来是纯被动事件）——防御性地在
+  // 每次要用的时候都尝试resume一下，已经在跑的话这个调用本身没有副作用。
+  if(callAudioCtx.state === 'suspended') callAudioCtx.resume().catch(()=>{});
+  return callAudioCtx;
+}
+function beep(freq, durMs, delaySec=0){
+  try{
+    const ctx = ensureCallAudioCtx();
+    const osc = ctx.createOscillator(), gain = ctx.createGain();
+    osc.frequency.value = freq;
+    osc.connect(gain); gain.connect(ctx.destination);
+    const t0 = ctx.currentTime + delaySec;
+    gain.gain.setValueAtTime(0.0001, t0);
+    gain.gain.exponentialRampToValueAtTime(0.2, t0 + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + durMs/1000);
+    osc.start(t0); osc.stop(t0 + durMs/1000 + 0.02);
+  }catch(e){}
+}
+let callRingLoopId = null;
+function stopRingLoop(){ if(callRingLoopId){ clearInterval(callRingLoopId); callRingLoopId = null; } }
+function playCallSound(kind){
+  stopRingLoop();
+  if(kind === 'incoming'){
+    const ring = () => { beep(740,320,0); beep(950,320,0.35); };
+    ring(); callRingLoopId = setInterval(ring, 1700);
+  } else if(kind === 'calling'){
+    const ring = () => beep(480,700,0);
+    ring(); callRingLoopId = setInterval(ring, 1600);
+  } else if(kind === 'connect'){
+    beep(660,120,0); beep(880,160,0.13);
+  } else if(kind === 'end'){
+    beep(380,220,0);
+  }
+}
+let prevCallStatus = null;
+// 大画面/小窗口谁显示谁——跟通话状态本身无关，纯展示状态，每次挂断/新通话
+// 重置回默认（对方大画面、自己小窗口），见 onCallStateChange 里call结束的分支
+let callUi = { mainIsRemote: true };
+function swapMainPip(){
+  callUi.mainIsRemote = !callUi.mainIsRemote;
+  const rv = $('#callRemoteVideo'), lv = $('#callLocalVideo');
+  if(rv) rv.className = callUi.mainIsRemote ? 'call-video-big' : 'call-video-pip';
+  if(lv) lv.className = callUi.mainIsRemote ? 'call-video-pip' : 'call-video-big';
+}
 function onCallStateChange(snapshot){
   const el = $('#callOverlay');
   if(!snapshot){
+    playCallSound('end');
     el.style.display = 'none';
     el.innerHTML = '';
     callRenderState = { peerUid: null, status: null, video: null, localStream: null, remoteStream: null };
+    callUi.mainIsRemote = true;
+    prevCallStatus = null;
     return;
+  }
+  if(snapshot.status !== prevCallStatus){
+    if(snapshot.status === 'calling') playCallSound('calling');
+    else if(snapshot.status === 'incoming') playCallSound('incoming');
+    else if(snapshot.status === 'active') playCallSound('connect');
+    prevCallStatus = snapshot.status;
   }
   const structurallyChanged = el.style.display === 'none'
     || snapshot.peerUid !== callRenderState.peerUid || snapshot.status !== callRenderState.status
@@ -3020,8 +3168,8 @@ function renderCallOverlay(snapshot){
     if(snapshot.video){
       html = `
         <div class="call-video-layer">
-          <video id="callRemoteVideo" autoplay playsinline></video>
-          <video id="callLocalVideo" autoplay playsinline muted class="local-preview"></video>
+          <video id="callRemoteVideo" autoplay playsinline class="${callUi.mainIsRemote ? 'call-video-big' : 'call-video-pip'}"></video>
+          <video id="callLocalVideo" autoplay playsinline muted class="${callUi.mainIsRemote ? 'call-video-pip' : 'call-video-big'}"></video>
         </div>
         <div class="call-peer-status" id="callTimer" style="position:absolute;top:16px;left:16px;z-index:3;">${snapshot.startedAt ? fmtCallDuration(Date.now() - snapshot.startedAt) : '00:00'}</div>
         <div class="call-actions" style="z-index:3;">
@@ -3052,6 +3200,10 @@ function renderCallOverlay(snapshot){
       const rv = $('#callRemoteVideo', el), lv = $('#callLocalVideo', el);
       if(rv && snapshot.remoteStream) rv.srcObject = snapshot.remoteStream;
       if(lv && snapshot.localStream) lv.srcObject = snapshot.localStream;
+      // 点哪个视频（不管它当前是大画面还是小窗口）都触发一次大小互换，
+      // 跟微信/FaceTime这类通话界面的习惯一致
+      rv?.addEventListener('click', swapMainPip);
+      lv?.addEventListener('click', swapMainPip);
     } else {
       const ra = $('#callRemoteAudio', el);
       if(ra && snapshot.remoteStream) ra.srcObject = snapshot.remoteStream;
@@ -5164,9 +5316,8 @@ async function renderContactsList(){
   body.innerHTML = friends.map(f=>{
     const unread = unreadBySender[f.id] || 0;
     return `<div class="contact-row" data-uid="${f.id}">
-      <span class="avatar-wrap"><img class="avatar" src="${f.avatar_url || placeholderAvatar()}">${isOnline(f)?'<span class="online-dot"></span>':''}</span>
+      <span class="avatar-wrap"><img class="avatar" src="${f.avatar_url || placeholderAvatar()}">${isOnline(f)?'<span class="online-dot"></span>':''}${unread>0 ? `<span class="contact-unread">${unread>99?'99+':unread}</span>` : ''}</span>
       <span class="contact-name">${escapeHTML(f.remark || f.nickname || '匿名用户')}</span>
-      ${unread>0 ? `<span class="contact-unread">${unread>99?'99+':unread}</span>` : ''}
     </div>`;
   }).join('');
   $$('.contact-row', body).forEach(row=>{
@@ -5327,6 +5478,10 @@ function appendChatRow(mine, msg){
 $('#chatBackBtn').addEventListener('click', ()=>{
   $('#chatOverlay').classList.remove('open');
   currentChatUserId = null;
+  // 打开聊天窗口时通讯录侧栏本来就被关掉了（见下面点好友行那段），"返回"
+  // 应该是回到通讯录，不是回到聊天窗口底下随便露出来的东西（大概率是首页）。
+  $('#contactsSidebar').classList.add('open');
+  $('#sidebarOverlay').classList.add('open');
 });
 // 之前录音一结束就立刻单独发一条语音消息，文字和语音没法合并成一条。现在改成
 // 录音只是"录好待发"，暂存在 chatPendingVoice 里，用小灰条提示；点主发送按钮时
